@@ -87,6 +87,37 @@ export interface ApiClientConfig {
   token?: string;
 }
 
+export interface DiscrepancyDetail {
+  code: string;
+  field: string;
+  expected: string;
+  actual: string;
+  variance?: number;
+  message: string;
+}
+
+export interface MatchingResult {
+  invoice_id: string;
+  purchase_order_id: string;
+  matching_type: '2_way' | '3_way' | '4_way';
+  category: 'goods' | 'service';
+  status: 'matched' | 'approved_with_tolerance' | 'discrepancy' | 'rejected';
+  price_variance: number;
+  quantity_variance: number;
+  tolerance_applied: boolean;
+  discrepancies: DiscrepancyDetail[];
+  summary_note: string;
+}
+
+export interface FiscalValidationResult {
+  status: 'accepted' | 'rejected' | 'annulled' | 'not_found';
+  response_code: string;
+  response_message: string;
+  issuer_condition: string;
+  issuer_status: string;
+  validated_at: string;
+}
+
 export class FactumfluxClient {
   private baseUrl: string;
   private tenantId?: string;
@@ -168,6 +199,19 @@ export class FactumfluxClient {
     return this.fetch('/api/v1/supplier/invoices/upload', {
       method: 'POST',
       body: formData,
+    });
+  }
+
+  // BackOffice Matching & Fiscal operations
+  async validateInvoiceSUNAT(invoiceId: string): Promise<FiscalValidationResult> {
+    return this.fetch(`/api/v1/backoffice/invoices/${invoiceId}/validate-sunat`, {
+      method: 'POST',
+    });
+  }
+
+  async runInvoiceMatch(invoiceId: string): Promise<MatchingResult> {
+    return this.fetch(`/api/v1/backoffice/invoices/${invoiceId}/match`, {
+      method: 'POST',
     });
   }
 }

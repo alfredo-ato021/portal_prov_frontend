@@ -11,6 +11,8 @@ import {
   Lock,
   Loader2,
   RefreshCw,
+  GitCompare,
+  FileCheck,
 } from 'lucide-react';
 import { StatusChip } from '@factumflux/ui';
 import { FactumfluxClient, InvoiceSummary, TenantSummary } from '@factumflux/api-client';
@@ -29,12 +31,45 @@ export default function App() {
   const [tenants, setTenants] = useState<TenantSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [processingInvoiceId, setProcessingInvoiceId] = useState<string | null>(null);
 
   // New tenant modal state
   const [isCreatingTenant, setIsCreatingTenant] = useState(false);
   const [newTenantName, setNewTenantName] = useState('');
   const [newTenantSlug, setNewTenantSlug] = useState('');
   const [newTenantRUC, setNewTenantRUC] = useState('');
+
+  const handleValidateSUNAT = async (invoiceId: string) => {
+    setProcessingInvoiceId(invoiceId);
+    setActionMessage(null);
+    setError(null);
+    try {
+      const res = await client.validateInvoiceSUNAT(invoiceId);
+      setActionMessage(`SUNAT (${res.status}): ${res.response_message}`);
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || 'Error validando con SUNAT');
+    } finally {
+      setProcessingInvoiceId(null);
+    }
+  };
+
+  const handleRunMatch = async (invoiceId: string) => {
+    setProcessingInvoiceId(invoiceId);
+    setActionMessage(null);
+    setError(null);
+    try {
+      const res = await client.runInvoiceMatch(invoiceId);
+      const catLabel = res.category === 'service' ? 'Confirmación de Servicios (HES)' : 'Recepción de Almacén (MIGO)';
+      setActionMessage(`Match 3-Way [${catLabel}]: ${res.summary_note}`);
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || 'Error ejecutando cruce 3-way');
+    } finally {
+      setProcessingInvoiceId(null);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -200,6 +235,14 @@ export default function App() {
               </div>
             </div>
 
+            {/* Action Message Banner */}
+            {actionMessage && (
+              <div className="mb-6 p-4 rounded-lg bg-[#E8F4F2] border border-[#CBE9E5] text-[#0A7469] text-xs flex items-center justify-between">
+                <span className="font-medium">{actionMessage}</span>
+                <button onClick={() => setActionMessage(null)} className="underline font-semibold ml-4">Cerrar</button>
+              </div>
+            )}
+
             {/* Error Banner */}
             {error && (
               <div className="mb-6 p-4 rounded-lg bg-[#FDECEA] border border-[#F4A09A] text-[#B42318] text-xs flex items-center justify-between">
@@ -281,6 +324,7 @@ export default function App() {
                       <th className="py-3 px-6 text-right">Monto</th>
                       <th className="py-3 px-6 text-center">Estado SUNAT</th>
                       <th className="py-3 px-6 text-center">Estado del Flujo</th>
+                      <th className="py-3 px-6 text-center">Acciones Operativas</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border)]">
@@ -307,6 +351,28 @@ export default function App() {
                         </td>
                         <td className="py-4 px-6 text-center">
                           <StatusChip state={inv.state} />
+                        </td>
+                        <td className="py-4 px-6 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => handleValidateSUNAT(inv.id)}
+                              disabled={processingInvoiceId === inv.id}
+                              className="px-2 py-1 bg-white hover:bg-[var(--muted)] border border-[var(--border)] rounded text-[11px] font-medium text-[#0B2545] inline-flex items-center gap-1 transition-colors disabled:opacity-50"
+                              title="Validar ante SUNAT"
+                            >
+                              <FileCheck className="w-3 h-3 text-[#0A7469]" />
+                              SUNAT
+                            </button>
+                            <button
+                              onClick={() => handleRunMatch(inv.id)}
+                              disabled={processingInvoiceId === inv.id}
+                              className="px-2 py-1 bg-[#0A7469] hover:bg-[#075A52] text-white rounded text-[11px] font-medium inline-flex items-center gap-1 transition-colors disabled:opacity-50"
+                              title="Ejecutar Cruce 3-Way (Almacén o Servicios)"
+                            >
+                              <GitCompare className="w-3 h-3" />
+                              Match 3-Way
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
