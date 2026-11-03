@@ -1,0 +1,90 @@
+{
+  "brand": {
+    "name": "Factumflux",
+    "tagline": "Del comprobante al pago, sin perseguir a nadie."
+  },
+  "nav": {
+    "supplier_portal": "Portal Proveedor",
+    "backoffice": "BackOffice Cliente",
+    "superadmin": "SuperAdmin SaaS",
+    "tenants": "Empresas",
+    "jit_support": "Soporte JIT",
+    "plans": "Planes",
+    "audit": "Auditoría"
+  },
+  "supplier": {
+    "upload_title": "Sube tu factura",
+    "upload_subtitle": "Arrastra el archivo XML y el PDF de tu factura para iniciar la validación y el cruce.",
+    "dropzone_prompt": "Arrastra tus archivos aquí o haz clic para explorar",
+    "dropzone_help": "Archivos permitidos: XML UBL 2.1 y PDF (máximo 10 MB)",
+    "upload_button": "Elegir archivos",
+    "recent_invoices_title": "Tus facturas recientes",
+    "recent_invoices_subtitle": "Seguimiento en tiempo real desde la recepción hasta el pago programado.",
+    "empty_state_title": "Aún no has enviado facturas",
+    "empty_state_subtitle": "Sube la primera factura para ver su estado aquí.",
+    "columns": {
+      "voucher": "Comprobante",
+      "client": "Cliente",
+      "issue_date": "Fecha Emisión",
+      "total": "Monto Total",
+      "status": "Estado"
+    }
+  },
+  "backoffice": {
+    "title": "Bandeja de Cuentas por Pagar",
+    "subtitle": "Supervisión de comprobantes recepcionados, validación tributaria y conciliación 3-Way Match.",
+    "kpi_received": "Facturas Recibidas",
+    "kpi_matched": "3-Way Match Aprobado",
+    "kpi_discrepancy": "Con Discrepancia",
+    "kpi_scheduled": "Monto Programado",
+    "empty_invoices_title": "No hay comprobantes pendientes de revisión",
+    "empty_invoices_subtitle": "Todas las facturas recibidas han sido conciliadas o aprobadas automáticamente."
+  },
+  "states": {
+    "recibido": {
+      "label": "Recibida",
+      "support": "Recibimos tu factura."
+    },
+    "parseado": {
+      "label": "En revisión",
+      "support": "Estamos leyendo los datos de tu factura."
+    },
+    "validado_sunat": {
+      "label": "En revisión",
+      "support": "Validamos tu factura ante la autoridad tributaria."
+    },
+    "match": {
+      "label": "En revisión",
+      "support": "La estamos cruzando con la orden de compra y la recepción."
+    },
+    "registrado_erp": {
+      "label": "Aprobada",
+      "support": "Tu factura fue aprobada. Te avisaremos la fecha de pago."
+    },
+    "programado": {
+      "label": "Programada",
+      "support": "Pago programado para el {fecha}."
+    },
+    "pagado": {
+      "label": "Pagada",
+      "support": "Pagada el {fecha} por {monto}."
+    },
+    "rechazado": {
+      "label": "Rechazada",
+      "support": "{motivo}. {accion}"
+    },
+    "observada": {
+      "label": "Requiere acción",
+      "support": "Falta {documento}. Súbelo antes del {fecha}."
+    }
+  },
+  "errors": {
+    "ERR_XML_INVALID": "El archivo no es un XML válido. Sube el XML original de tu factura.",
+    "ERR_XML_SIGNATURE": "La firma digital del XML no es válida o está alterada. Sube el archivo original emitido.",
+    "ERR_SUNAT_REJECTED": "La autoridad tributaria no reconoce esta factura. Revisa el número y vuelve a enviarla.",
+    "ERR_RUC_NOT_FOUND": "El RUC del emisor no se encuentra activo o habido en la autoridad tributaria.",
+    "ERR_PO_MISMATCH": "Los montos o ítems no coinciden con la orden de compra.",
+    "ERR_DUPLICATE_INVOICE": "Esta factura ya fue registrada previamente en la plataforma.",
+    "ERR_SESSION_EXPIRED": "Tu sesión venció. Inicia sesión para continuar."
+  }
+}

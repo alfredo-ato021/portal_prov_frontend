@@ -1,53 +1,45 @@
-import { useState } from 'react';
-import { StatusChip, InvoiceInternalState } from '@factumflux/ui';
-import { UploadCloud } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { StatusChip } from '@factumflux/ui';
+import { FactumfluxClient, InvoiceSummary } from '@factumflux/api-client';
+import { t, formatCurrency, formatDate } from '@factumflux/i18n';
+import { UploadCloud, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 
-interface MockInvoice {
-  id: string;
-  series: string;
-  number: string;
-  client: string;
-  issueDate: string;
-  total: string;
-  currency: string;
-  state: InvoiceInternalState;
-}
-
-const MOCK_INVOICES: MockInvoice[] = [
-  {
-    id: '1',
-    series: 'F001',
-    number: '00004521',
-    client: 'La Bodega de la Trattoria S.A.C.',
-    issueDate: '2026-11-01',
-    total: '14,250.00',
-    currency: 'PEN',
-    state: 'registrado_erp',
-  },
-  {
-    id: '2',
-    series: 'F001',
-    number: '00004522',
-    client: 'Operadora Gastronómica S.A.',
-    issueDate: '2026-11-02',
-    total: '8,400.50',
-    currency: 'PEN',
-    state: 'match',
-  },
-  {
-    id: '3',
-    series: 'F001',
-    number: '00004523',
-    client: 'Corporación Alimentos RVA',
-    issueDate: '2026-11-03',
-    total: '3,120.00',
-    currency: 'PEN',
-    state: 'observada',
-  },
-];
+const client = new FactumfluxClient({
+  baseUrl: 'http://localhost:8080',
+  tenantId: 'a1111111-1111-1111-1111-111111111111', // Tenant La Bodega de la Trattoria
+});
 
 export default function App() {
-  const [invoices] = useState<MockInvoice[]>(MOCK_INVOICES);
+  const [invoices, setInvoices] = useState<InvoiceSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const fetchInvoices = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await client.listSupplierInvoices();
+      setInvoices(data);
+    } catch (err: any) {
+      setError(err?.message || 'Error al conectar con el servidor.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchInvoices();
+  }, []);
+
+  const handleUploadClick = () => {
+    setIsUploading(true);
+    // Simula apertura de selector de archivos nativo con feedback visual controlado
+    setTimeout(() => {
+      setIsUploading(false);
+      alert('Selector de archivos: Selecciona tu archivo XML UBL 2.1 y la representación impresa en PDF.');
+    }, 400);
+  };
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] font-sans">
@@ -59,7 +51,7 @@ export default function App() {
               Factum<span className="text-[#0A7469]">flux</span>
             </span>
             <span className="text-xs bg-[var(--accent)] text-[#0A7469] font-medium px-2 py-0.5 rounded">
-              Portal Proveedor
+              {t('nav.supplier_portal')}
             </span>
           </div>
           <div className="text-sm text-[var(--muted-foreground)]">
@@ -72,21 +64,28 @@ export default function App() {
       <main className="max-w-5xl mx-auto px-6 py-8">
         {/* Upload Hero Section */}
         <section className="bg-[var(--card)] border border-[var(--border)] rounded-[10px] p-6 shadow-sm mb-8">
-          <h1 className="text-2xl font-semibold mb-2">Sube tu factura</h1>
+          <h1 className="text-2xl font-semibold mb-2">{t('supplier.upload_title')}</h1>
           <p className="text-sm text-[var(--muted-foreground)] mb-6">
-            Arrastra el archivo XML y el PDF de tu comprobante de pago para iniciar el proceso de validación y cuadre automático.
+            {t('supplier.upload_subtitle')}
           </p>
 
-          <div className="border-2 border-dashed border-[var(--input)] hover:border-[#0A7469] rounded-[10px] p-8 text-center transition-colors cursor-pointer bg-[var(--accent)]/30">
-            <UploadCloud className="w-10 h-10 text-[#0A7469] mx-auto mb-3" />
+          <div
+            onClick={handleUploadClick}
+            className="border-2 border-dashed border-[var(--input)] hover:border-[#0A7469] rounded-[10px] p-8 text-center transition-colors cursor-pointer bg-[var(--accent)]/30 group"
+          >
+            <UploadCloud className="w-10 h-10 text-[#0A7469] mx-auto mb-3 group-hover:scale-105 transition-transform" />
             <p className="text-sm font-medium mb-1">
-              Arrastra tus archivos aquí o haz clic para explorar
+              {t('supplier.dropzone_prompt')}
             </p>
             <p className="text-xs text-[var(--muted-foreground)]">
-              Formatos soportados: XML UBL 2.1 y PDF (hasta 10 MB por archivo)
+              {t('supplier.dropzone_help')}
             </p>
-            <button className="mt-4 px-4 py-2 bg-[#0A7469] text-white text-sm font-medium rounded-md hover:bg-[#075A52] transition-colors">
-              Elegir archivos
+            <button
+              disabled={isUploading}
+              className="mt-4 px-4 py-2 bg-[#0A7469] text-white text-sm font-medium rounded-md hover:bg-[#075A52] transition-colors disabled:opacity-50 inline-flex items-center gap-2"
+            >
+              {isUploading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {t('supplier.upload_button')}
             </button>
           </div>
         </section>
@@ -95,47 +94,79 @@ export default function App() {
         <section className="bg-[var(--card)] border border-[var(--border)] rounded-[10px] shadow-sm overflow-hidden">
           <div className="p-6 border-b border-[var(--border)] flex justify-between items-center">
             <div>
-              <h2 className="text-lg font-semibold">Tus facturas recientes</h2>
+              <h2 className="text-lg font-semibold">{t('supplier.recent_invoices_title')}</h2>
               <p className="text-xs text-[var(--muted-foreground)]">
-                Seguimiento en tiempo real desde la recepción hasta el pago programado.
+                {t('supplier.recent_invoices_subtitle')}
               </p>
             </div>
+            <button
+              onClick={fetchInvoices}
+              disabled={loading}
+              className="p-2 text-[var(--muted-foreground)] hover:text-[#0A7469] rounded-md transition-colors"
+              title="Recargar facturas"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border)] bg-[var(--muted)]/50 text-[var(--muted-foreground)] text-xs uppercase font-medium">
-                  <th className="py-3 px-6">Comprobante</th>
-                  <th className="py-3 px-6">Cliente</th>
-                  <th className="py-3 px-6">Fecha Emisión</th>
-                  <th className="py-3 px-6 text-right">Monto Total</th>
-                  <th className="py-3 px-6 text-center">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border)]">
-                {invoices.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-[var(--muted)]/40 transition-colors">
-                    <td className="py-4 px-6 font-mono font-medium">
-                      {inv.series}-{inv.number}
-                    </td>
-                    <td className="py-4 px-6 text-[var(--foreground)]">
-                      {inv.client}
-                    </td>
-                    <td className="py-4 px-6 text-[var(--muted-foreground)]">
-                      {inv.issueDate}
-                    </td>
-                    <td className="py-4 px-6 text-right font-mono font-semibold">
-                      {inv.currency} {inv.total}
-                    </td>
-                    <td className="py-4 px-6 text-center">
-                      <StatusChip state={inv.state} />
-                    </td>
+          {loading ? (
+            <div className="p-12 text-center text-sm text-[var(--muted-foreground)] flex flex-col items-center gap-3">
+              <Loader2 className="w-6 h-6 animate-spin text-[#0A7469]" />
+              <span>Conectando con Neon DB y sincronizando facturas...</span>
+            </div>
+          ) : error ? (
+            <div className="p-8 text-center text-sm text-[#B42318] flex flex-col items-center gap-2">
+              <AlertCircle className="w-6 h-6" />
+              <span>{error}</span>
+              <button
+                onClick={fetchInvoices}
+                className="mt-2 text-xs font-semibold underline text-[#0B2545]"
+              >
+                Reintentar conexión
+              </button>
+            </div>
+          ) : invoices.length === 0 ? (
+            <div className="p-12 text-center text-sm text-[var(--muted-foreground)]">
+              <p className="font-semibold text-[var(--foreground)]">{t('supplier.empty_state_title')}</p>
+              <p className="text-xs mt-1">{t('supplier.empty_state_subtitle')}</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--border)] bg-[var(--muted)]/50 text-[var(--muted-foreground)] text-xs uppercase font-medium">
+                    <th className="py-3 px-6">{t('supplier.columns.voucher')}</th>
+                    <th className="py-3 px-6">{t('supplier.columns.issue_date')}</th>
+                    <th className="py-3 px-6 text-right">{t('supplier.columns.total')}</th>
+                    <th className="py-3 px-6 text-center">{t('supplier.columns.status')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-[var(--border)]">
+                  {invoices.map((inv) => (
+                    <tr key={inv.id} className="hover:bg-[var(--muted)]/40 transition-colors">
+                      <td className="py-4 px-6 font-mono font-medium">
+                        {inv.series}-{inv.number}
+                        {inv.action_required_note && (
+                          <span className="block text-xs font-sans text-[#8A5A00] mt-0.5">
+                            Nota: {inv.action_required_note}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-4 px-6 text-[var(--muted-foreground)]">
+                        {formatDate(inv.issue_date)}
+                      </td>
+                      <td className="py-4 px-6 text-right font-mono font-semibold">
+                        {formatCurrency(inv.total_amount, inv.currency)}
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        <StatusChip state={inv.state} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       </main>
     </div>

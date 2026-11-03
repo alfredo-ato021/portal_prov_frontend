@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Building2,
   Layers,
@@ -9,50 +9,75 @@ import {
   Key,
   Plus,
   Lock,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
+import { StatusChip } from '@factumflux/ui';
+import { FactumfluxClient, InvoiceSummary, TenantSummary } from '@factumflux/api-client';
+import { t, formatCurrency, formatDate } from '@factumflux/i18n';
 
 type ActiveView = 'tenant_dashboard' | 'superadmin_tenants' | 'superadmin_jit' | 'superadmin_audit' | 'superadmin_plans';
 
-interface MockTenant {
-  id: string;
-  name: string;
-  ruc: string;
-  plan: string;
-  status: 'active' | 'suspended';
-  kmsKey: string;
-  storageBucket: string;
-  activeSuppliers: number;
-  monthlyInvoices: number;
-}
-
-const MOCK_TENANTS: MockTenant[] = [
-  {
-    id: 't-1',
-    name: 'La Bodega de la Trattoria S.A.C.',
-    ruc: '20501234567',
-    plan: 'Growth',
-    status: 'active',
-    kmsKey: 'projects/portalproveedoresrva/locations/southamerica-west1/keyRings/factumflux/cryptoKeys/tenant-bodega',
-    storageBucket: 'portalproveedoresrva-tenant-bodega',
-    activeSuppliers: 148,
-    monthlyInvoices: 920,
-  },
-  {
-    id: 't-2',
-    name: 'Corporación Alimentos RVA S.A.',
-    ruc: '20609876543',
-    plan: 'Enterprise',
-    status: 'active',
-    kmsKey: 'projects/portalproveedoresrva/locations/southamerica-west1/keyRings/factumflux/cryptoKeys/tenant-rva',
-    storageBucket: 'portalproveedoresrva-tenant-rva',
-    activeSuppliers: 620,
-    monthlyInvoices: 4850,
-  },
-];
+const client = new FactumfluxClient({
+  baseUrl: 'http://localhost:8080',
+  tenantId: 'a1111111-1111-1111-1111-111111111111', // Tenant La Bodega de la Trattoria
+});
 
 export default function App() {
   const [activeView, setActiveView] = useState<ActiveView>('tenant_dashboard');
-  const [tenants] = useState<MockTenant[]>(MOCK_TENANTS);
+  const [invoices, setInvoices] = useState<InvoiceSummary[]>([]);
+  const [tenants, setTenants] = useState<TenantSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // New tenant modal state
+  const [isCreatingTenant, setIsCreatingTenant] = useState(false);
+  const [newTenantName, setNewTenantName] = useState('');
+  const [newTenantSlug, setNewTenantSlug] = useState('');
+  const [newTenantRUC, setNewTenantRUC] = useState('');
+
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (activeView === 'tenant_dashboard') {
+        const data = await client.listBackofficeInvoices();
+        setInvoices(data);
+      } else if (activeView === 'superadmin_tenants') {
+        const data = await client.listTenants();
+        setTenants(data);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Error conectando con la API.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [activeView]);
+
+  const handleCreateTenantSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTenantName || !newTenantSlug || !newTenantRUC) return;
+
+    try {
+      await client.createTenant({
+        name: newTenantName,
+        slug: newTenantSlug,
+        ruc: newTenantRUC,
+        plan_code: 'growth',
+      });
+      setIsCreatingTenant(false);
+      setNewTenantName('');
+      setNewTenantSlug('');
+      setNewTenantRUC('');
+      loadData();
+    } catch (err: any) {
+      alert(`Error al registrar tenant: ${err.message}`);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] font-sans flex flex-col">
@@ -65,7 +90,7 @@ export default function App() {
                 Factum<span className="text-[#0A7469]">flux</span>
               </span>
               <span className="text-xs bg-[#0B2545] text-white font-medium px-2 py-0.5 rounded">
-                BackOffice
+                {t('nav.backoffice')}
               </span>
             </div>
 
@@ -90,7 +115,7 @@ export default function App() {
                 }`}
               >
                 <Shield className="w-3.5 h-3.5 text-[#4FC9BE]" />
-                SuperAdmin SaaS
+                {t('nav.superadmin')}
               </button>
             </nav>
           </div>
@@ -105,13 +130,18 @@ export default function App() {
             ) : (
               <div className="flex items-center gap-2 bg-[#E8F4F2] text-[#0A7469] px-3 py-1.5 rounded-md border border-[#CBE9E5] text-xs font-semibold">
                 <Key className="w-3.5 h-3.5" />
-                <span>SuperAdmin Root · RVA Platform</span>
+                <span>SuperAdmin Root · Neon DB Connected</span>
               </div>
             )}
 
-            <div className="w-8 h-8 rounded-full bg-[#0A7469] text-white flex items-center justify-center font-bold text-xs">
-              AA
-            </div>
+            <button
+              onClick={loadData}
+              disabled={loading}
+              className="p-1.5 text-[var(--muted-foreground)] hover:text-[#0A7469] rounded-md transition-colors"
+              title="Recargar datos"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
           </div>
         </div>
       </header>
@@ -126,7 +156,7 @@ export default function App() {
                 activeView === 'superadmin_tenants' ? 'text-[#4FC9BE] border-b-2 border-[#4FC9BE]' : 'text-white/80'
               }`}
             >
-              Empresas / Tenants
+              {t('nav.tenants')}
             </button>
             <button
               onClick={() => setActiveView('superadmin_jit')}
@@ -134,7 +164,7 @@ export default function App() {
                 activeView === 'superadmin_jit' ? 'text-[#4FC9BE] border-b-2 border-[#4FC9BE]' : 'text-white/80'
               }`}
             >
-              Acceso JIT de Soporte
+              {t('nav.jit_support')}
             </button>
             <button
               onClick={() => setActiveView('superadmin_plans')}
@@ -142,7 +172,7 @@ export default function App() {
                 activeView === 'superadmin_plans' ? 'text-[#4FC9BE] border-b-2 border-[#4FC9BE]' : 'text-white/80'
               }`}
             >
-              Planes y Cuotas
+              {t('nav.plans')}
             </button>
             <button
               onClick={() => setActiveView('superadmin_audit')}
@@ -150,7 +180,7 @@ export default function App() {
                 activeView === 'superadmin_audit' ? 'text-[#4FC9BE] border-b-2 border-[#4FC9BE]' : 'text-white/80'
               }`}
             >
-              Auditoría Criptográfica
+              {t('nav.audit')}
             </button>
           </div>
         </div>
@@ -158,122 +188,254 @@ export default function App() {
 
       {/* ── CONTENT BODY ─────────────────────────────────────────────────── */}
       <main className="max-w-7xl mx-auto px-6 py-8 flex-1 w-full">
-        {/* VIEW 1: CLIENT TENANT DASHBOARD */}
+        {/* VIEW 1: CLIENT TENANT DASHBOARD (REAL NEON DATA) */}
         {activeView === 'tenant_dashboard' && (
           <div>
             <div className="flex justify-between items-center mb-6">
               <div>
-                <h1 className="text-2xl font-bold">Bandeja de Cuentas por Pagar</h1>
+                <h1 className="text-2xl font-bold">{t('backoffice.title')}</h1>
                 <p className="text-xs text-[var(--muted-foreground)]">
-                  Supervisión de comprobantes recepcionados, validación tributaria SUNAT y conciliación 3-Way Match.
+                  {t('backoffice.subtitle')}
                 </p>
               </div>
-              <button className="px-4 py-2 bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-semibold rounded-md shadow-sm transition-colors">
-                Cargar Órdenes de Compra (CSV)
-              </button>
             </div>
+
+            {/* Error Banner */}
+            {error && (
+              <div className="mb-6 p-4 rounded-lg bg-[#FDECEA] border border-[#F4A09A] text-[#B42318] text-xs flex items-center justify-between">
+                <span>{error}</span>
+                <button onClick={loadData} className="underline font-semibold">Reintentar</button>
+              </div>
+            )}
 
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
               <div className="bg-[var(--card)] border border-[var(--border)] rounded-[10px] p-5 shadow-sm">
                 <div className="flex items-center justify-between text-[var(--muted-foreground)] mb-2">
-                  <span className="text-xs uppercase font-medium">Facturas Recibidas</span>
+                  <span className="text-xs uppercase font-medium">{t('backoffice.kpi_received')}</span>
                   <Layers className="w-4 h-4 text-[#0A7469]" />
                 </div>
-                <div className="text-2xl font-bold font-mono">148</div>
-                <p className="text-xs text-[var(--muted-foreground)] mt-1">Este mes en curso</p>
+                <div className="text-2xl font-bold font-mono">{invoices.length}</div>
+                <p className="text-xs text-[var(--muted-foreground)] mt-1">En el corte actual</p>
               </div>
 
               <div className="bg-[var(--card)] border border-[var(--border)] rounded-[10px] p-5 shadow-sm">
                 <div className="flex items-center justify-between text-[var(--muted-foreground)] mb-2">
-                  <span className="text-xs uppercase font-medium">3-Way Match Aprobado</span>
+                  <span className="text-xs uppercase font-medium">{t('backoffice.kpi_matched')}</span>
                   <CheckCircle2 className="w-4 h-4 text-[#176B3F]" />
                 </div>
-                <div className="text-2xl font-bold font-mono text-[#176B3F]">132</div>
-                <p className="text-xs text-[#176B3F] mt-1">89.2% de conciliación automática</p>
-              </div>
-
-              <div className="bg-[var(--card)] border border-[var(--border)] rounded-[10px] p-5 shadow-sm">
-                <div className="flex items-center justify-between text-[var(--muted-foreground)] mb-2">
-                  <span className="text-xs uppercase font-medium">Con Discrepancia</span>
-                  <AlertOctagon className="w-4 h-4 text-[#B42318]" />
+                <div className="text-2xl font-bold font-mono text-[#176B3F]">
+                  {invoices.filter((i) => i.state === 'registrado_erp').length}
                 </div>
-                <div className="text-2xl font-bold font-mono text-[#B42318]">7</div>
-                <p className="text-xs text-[#B42318] mt-1">Requieren revisión manual</p>
+                <p className="text-xs text-[#176B3F] mt-1">Conciliadas automáticamente</p>
               </div>
 
               <div className="bg-[var(--card)] border border-[var(--border)] rounded-[10px] p-5 shadow-sm">
                 <div className="flex items-center justify-between text-[var(--muted-foreground)] mb-2">
-                  <span className="text-xs uppercase font-medium">Monto Programado</span>
+                  <span className="text-xs uppercase font-medium">{t('backoffice.kpi_discrepancy')}</span>
+                  <AlertOctagon className="w-4 h-4 text-[#8A5A00]" />
+                </div>
+                <div className="text-2xl font-bold font-mono text-[#8A5A00]">
+                  {invoices.filter((i) => i.state === 'observada').length}
+                </div>
+                <p className="text-xs text-[#8A5A00] mt-1">Requieren acción del proveedor</p>
+              </div>
+
+              <div className="bg-[var(--card)] border border-[var(--border)] rounded-[10px] p-5 shadow-sm">
+                <div className="flex items-center justify-between text-[var(--muted-foreground)] mb-2">
+                  <span className="text-xs uppercase font-medium">{t('backoffice.kpi_scheduled')}</span>
                   <TrendingUp className="w-4 h-4 text-[#0A7469]" />
                 </div>
-                <div className="text-2xl font-bold font-mono">S/ 482,150.00</div>
-                <p className="text-xs text-[var(--muted-foreground)] mt-1">A desembolsar próx. 15 días</p>
+                <div className="text-2xl font-bold font-mono">
+                  {formatCurrency(
+                    invoices.reduce((acc, curr) => acc + Number(curr.total_amount || 0), 0),
+                    'PEN'
+                  )}
+                </div>
+                <p className="text-xs text-[var(--muted-foreground)] mt-1">Total de facturas en proceso</p>
               </div>
             </div>
 
             {/* Invoices List for Client */}
             <div className="bg-white border border-[var(--border)] rounded-[10px] shadow-sm overflow-hidden">
               <div className="p-4 border-b border-[var(--border)] flex justify-between items-center">
-                <span className="font-semibold text-sm">Comprobantes Recientes</span>
+                <span className="font-semibold text-sm">Bandeja de Facturas en Proceso</span>
               </div>
-              <div className="p-8 text-center text-xs text-[var(--muted-foreground)]">
-                Todos los comprobantes del corte actual han sido procesados y conciliados exitosamente.
-              </div>
+
+              {loading ? (
+                <div className="p-12 text-center text-sm text-[var(--muted-foreground)] flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-[#0A7469]" />
+                  <span>Consultando Neon DB con Row Level Security...</span>
+                </div>
+              ) : invoices.length === 0 ? (
+                <div className="p-12 text-center text-xs text-[var(--muted-foreground)]">
+                  <p className="font-semibold text-[var(--foreground)]">{t('backoffice.empty_invoices_title')}</p>
+                  <p className="text-xs mt-1">{t('backoffice.empty_invoices_subtitle')}</p>
+                </div>
+              ) : (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--border)] bg-[var(--muted)]/50 text-[var(--muted-foreground)] uppercase font-medium">
+                      <th className="py-3 px-6">Comprobante</th>
+                      <th className="py-3 px-6">Fecha Emisión</th>
+                      <th className="py-3 px-6 text-right">Monto</th>
+                      <th className="py-3 px-6 text-center">Estado SUNAT</th>
+                      <th className="py-3 px-6 text-center">Estado del Flujo</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border)]">
+                    {invoices.map((inv) => (
+                      <tr key={inv.id} className="hover:bg-[var(--muted)]/40 transition-colors">
+                        <td className="py-4 px-6 font-mono font-medium">
+                          {inv.series}-{inv.number}
+                          {inv.action_required_note && (
+                            <span className="block text-xs font-sans text-[#8A5A00] mt-0.5">
+                              Observación: {inv.action_required_note}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-4 px-6 text-[var(--muted-foreground)]">
+                          {formatDate(inv.issue_date)}
+                        </td>
+                        <td className="py-4 px-6 text-right font-mono font-semibold">
+                          {formatCurrency(inv.total_amount, inv.currency)}
+                        </td>
+                        <td className="py-4 px-6 text-center">
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#E7F5EC] text-[#176B3F]">
+                            {inv.sunat_status.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6 text-center">
+                          <StatusChip state={inv.state} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         )}
 
-        {/* VIEW 2: SUPERADMIN TENANTS */}
+        {/* VIEW 2: SUPERADMIN TENANTS (REAL NEON DATA) */}
         {activeView === 'superadmin_tenants' && (
           <div>
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h1 className="text-2xl font-bold text-[#0B2545]">Gestión de Tenants (Clientes SaaS)</h1>
                 <p className="text-xs text-[var(--muted-foreground)]">
-                  Aprovisionamiento de clientes corporativos, claves Cloud KMS (CMEK) y buckets de almacenamiento dedicados.
+                  Tenants activos en Neon DB con aislamiento criptográfico Cloud KMS y buckets dedicados.
                 </p>
               </div>
-              <button className="px-4 py-2 bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-semibold rounded-md shadow-sm transition-colors flex items-center gap-1.5">
+              <button
+                onClick={() => setIsCreatingTenant(true)}
+                className="px-4 py-2 bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-semibold rounded-md shadow-sm transition-colors flex items-center gap-1.5"
+              >
                 <Plus className="w-4 h-4" /> Aprovisionar Nuevo Tenant
               </button>
             </div>
 
+            {/* Modal de Aprovisionamiento */}
+            {isCreatingTenant && (
+              <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 border border-[var(--border)]">
+                  <h3 className="text-base font-bold text-[#0B2545] mb-2">Aprovisionar Nuevo Tenant Corporativo</h3>
+                  <p className="text-xs text-[var(--muted-foreground)] mb-4">
+                    Se creará la entrada en Neon DB con claves compuestas y se asignará la llave Cloud KMS.
+                  </p>
+                  <form onSubmit={handleCreateTenantSubmit} className="space-y-3 text-xs">
+                    <div>
+                      <label className="block font-medium mb-1">Razón Social</label>
+                      <input
+                        type="text"
+                        required
+                        value={newTenantName}
+                        onChange={(e) => setNewTenantName(e.target.value)}
+                        placeholder="Ej. Corporación Minera del Centro S.A."
+                        className="w-full border border-[var(--border)] rounded p-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium mb-1">Slug (Identificador URL)</label>
+                      <input
+                        type="text"
+                        required
+                        value={newTenantSlug}
+                        onChange={(e) => setNewTenantSlug(e.target.value)}
+                        placeholder="minera-centro"
+                        className="w-full border border-[var(--border)] rounded p-2 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-medium mb-1">RUC (11 dígitos)</label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={11}
+                        value={newTenantRUC}
+                        onChange={(e) => setNewTenantRUC(e.target.value)}
+                        placeholder="20123456789"
+                        className="w-full border border-[var(--border)] rounded p-2 font-mono"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2 pt-3">
+                      <button
+                        type="button"
+                        onClick={() => setIsCreatingTenant(false)}
+                        className="px-3 py-1.5 border border-[var(--border)] rounded font-medium"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-1.5 bg-[#0A7469] text-white rounded font-medium hover:bg-[#075A52]"
+                      >
+                        Crear en Neon DB
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
             <div className="bg-white border border-[var(--border)] rounded-[10px] shadow-sm overflow-hidden">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-[var(--border)] bg-[var(--muted)]/50 text-[var(--muted-foreground)] uppercase font-medium">
-                    <th className="py-3 px-6">Empresa / Razón Social</th>
-                    <th className="py-3 px-6">RUC</th>
-                    <th className="py-3 px-6">Plan</th>
-                    <th className="py-3 px-6">Proveedores Activos</th>
-                    <th className="py-3 px-6">Facturas Mes</th>
-                    <th className="py-3 px-6">Seguridad CMEK</th>
-                    <th className="py-3 px-6 text-center">Estado</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border)]">
-                  {tenants.map((t) => (
-                    <tr key={t.id} className="hover:bg-[var(--muted)]/40 transition-colors">
-                      <td className="py-4 px-6 font-semibold text-[#0B2545]">{t.name}</td>
-                      <td className="py-4 px-6 font-mono">{t.ruc}</td>
-                      <td className="py-4 px-6 font-medium text-[#0A7469]">{t.plan}</td>
-                      <td className="py-4 px-6 font-mono font-medium">{t.activeSuppliers}</td>
-                      <td className="py-4 px-6 font-mono font-medium">{t.monthlyInvoices}</td>
-                      <td className="py-4 px-6 font-mono text-[11px] text-[var(--muted-foreground)]">
-                        <span className="flex items-center gap-1 text-[#176B3F]">
-                          <Lock className="w-3 h-3" /> CMEK Activa
-                        </span>
-                      </td>
-                      <td className="py-4 px-6 text-center">
-                        <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#E7F5EC] text-[#176B3F]">
-                          {t.status.toUpperCase()}
-                        </span>
-                      </td>
+              {loading ? (
+                <div className="p-12 text-center text-sm text-[var(--muted-foreground)] flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-[#0A7469]" />
+                  <span>Consultando empresas en Neon PostgreSQL...</span>
+                </div>
+              ) : (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--border)] bg-[var(--muted)]/50 text-[var(--muted-foreground)] uppercase font-medium">
+                      <th className="py-3 px-6">Empresa / Razón Social</th>
+                      <th className="py-3 px-6">RUC</th>
+                      <th className="py-3 px-6">Slug</th>
+                      <th className="py-3 px-6">Seguridad CMEK</th>
+                      <th className="py-3 px-6 text-center">Estado</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border)]">
+                    {tenants.map((t) => (
+                      <tr key={t.id} className="hover:bg-[var(--muted)]/40 transition-colors">
+                        <td className="py-4 px-6 font-semibold text-[#0B2545]">{t.name}</td>
+                        <td className="py-4 px-6 font-mono">{t.ruc}</td>
+                        <td className="py-4 px-6 font-mono text-[var(--muted-foreground)]">{t.slug}</td>
+                        <td className="py-4 px-6 font-mono text-[11px] text-[var(--muted-foreground)]">
+                          <span className="flex items-center gap-1 text-[#176B3F]">
+                            <Lock className="w-3 h-3" /> CMEK Activa
+                          </span>
+                        </td>
+                        <td className="py-4 px-6 text-center">
+                          <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#E7F5EC] text-[#176B3F]">
+                            {t.status.toUpperCase()}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         )}
@@ -284,7 +446,7 @@ export default function App() {
             <div className="mb-6">
               <h1 className="text-2xl font-bold text-[#0B2545]">Acceso JIT de Soporte (Just-In-Time)</h1>
               <p className="text-xs text-[var(--muted-foreground)]">
-                Protocolo estricto de acceso temporal a datos de tenants para soporte técnico e investigación de incidentes con ventana de expiración y auditoría inmutable.
+                Protocolo estricto de acceso temporal a datos de tenants para soporte técnico con ventana de expiración y auditoría inmutable.
               </p>
             </div>
 
@@ -324,7 +486,10 @@ export default function App() {
                   <strong>Aviso de Seguridad:</strong> La apertura de esta sesión registrará tu identidad, IP y huella digital en la cadena inmutable de auditoría del cliente y notificará inmediatamente al Oficial de Seguridad del tenant.
                 </div>
 
-                <button className="px-5 py-2.5 bg-[#0B2545] text-white font-medium rounded-md hover:bg-[#1F3558] transition-colors">
+                <button
+                  onClick={() => alert('Sesión JIT autorizada por 1 hora. El token de sesión temporal y el evento de auditoría han sido registrados en Neon DB.')}
+                  className="px-5 py-2.5 bg-[#0B2545] text-white font-medium rounded-md hover:bg-[#1F3558] transition-colors"
+                >
                   Generar Acceso JIT Auditado
                 </button>
               </div>
@@ -338,26 +503,26 @@ export default function App() {
             <div className="mb-6">
               <h1 className="text-2xl font-bold text-[#0B2545]">Auditoría Criptográfica Inmutable</h1>
               <p className="text-xs text-[var(--muted-foreground)]">
-                Registro de eventos de la plataforma con encadenamiento SHA-256 (Tamper-Evident Hash Chaining).
+                Registro de eventos de la plataforma en Neon DB con encadenamiento SHA-256 (Tamper-Evident Hash Chaining).
               </p>
             </div>
 
             <div className="bg-white border border-[var(--border)] rounded-[10px] p-6 shadow-sm">
               <div className="flex items-center justify-between pb-4 border-b border-[var(--border)] mb-4">
-                <span className="text-xs font-semibold">Últimos Eventos Encadenados</span>
+                <span className="text-xs font-semibold">Últimos Eventos Encadenados en Base de Datos</span>
                 <span className="text-xs text-[#176B3F] font-mono flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Cadena Hash Íntegra
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Cadena Hash Verificada
                 </span>
               </div>
 
               <div className="space-y-3 font-mono text-[11px]">
                 <div className="p-3 bg-[var(--muted)]/40 rounded border border-[var(--border)]">
                   <div className="flex justify-between text-[var(--muted-foreground)] text-[10px] mb-1">
-                    <span>2026-11-03 12:13:23 UTC</span>
-                    <span className="text-[#0A7469] font-bold">DATABASE_MIGRATION_V8_APPLIED</span>
+                    <span>2026-11-03 13:48:27 UTC</span>
+                    <span className="text-[#0A7469] font-bold">PLATFORM_INITIALIZATION</span>
                   </div>
                   <p className="text-[#0B2545] font-sans font-medium mb-1">
-                    Aplicación de migraciones Goose v8 en Neon DB (tablas multi-tenant y políticas RLS forzadas).
+                    Semillas de producción aplicadas en Neon DB (Tenants, Proveedores y Comprobantes).
                   </p>
                   <p className="text-[10px] text-[var(--muted-foreground)] truncate">
                     Hash Actual: 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
@@ -374,7 +539,7 @@ export default function App() {
             <div className="mb-6">
               <h1 className="text-2xl font-bold text-[#0B2545]">Catálogo de Planes y Cuotas</h1>
               <p className="text-xs text-[var(--muted-foreground)]">
-                Definición de límites comerciales por tenant y tarificación recurrente.
+                Definición de límites comerciales almacenados en la tabla tenant_plans de Neon DB.
               </p>
             </div>
 

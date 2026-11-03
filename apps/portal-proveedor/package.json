@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@factumflux/api-client": "workspace:*",
+    "@factumflux/i18n": "workspace:*",
     "@factumflux/ui": "workspace:*",
     "lucide-react": "^0.475.0",
     "react": "^19.0.0",
@@ -22,4 +24,3 @@
     "vite": "^6.2.0"
   }
 }
-
