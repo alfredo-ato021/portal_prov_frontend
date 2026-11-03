@@ -1,0 +1,16 @@
+{
+  "name": "factumflux-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Factumflux Portal de Proveedores - Monorepo",
+  "scripts": {
+    "dev:proveedor": "pnpm --filter @factumflux/portal-proveedor dev",
+    "dev:backoffice": "pnpm --filter @factumflux/backoffice dev",
+    "build": "pnpm --recursive run build",
+    "lint": "pnpm --recursive run lint",
+    "typecheck": "pnpm --recursive run typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

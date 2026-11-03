@@ -1,0 +1,64 @@
+/* Factumflux Design Tokens - WCAG 2.1 AA Compliant */
+:root {
+  --background: #FFFFFF;
+  --foreground: #0B2545;
+  --card: #FFFFFF;
+  --card-foreground: #0B2545;
+  --muted: #F3F5F8;
+  --muted-foreground: #5B6B7F;
+  --primary: #0A7469;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F3F5F8;
+  --secondary-foreground: #0B2545;
+  --accent: #E8F4F2;
+  --accent-foreground: #0A7469;
+  --destructive: #B42318;
+  --destructive-foreground: #FFFFFF;
+  --border: #E2E7EE;
+  --input: #C3CCD9;
+  --ring: #0A7469;
+  --radius: 0.375rem;
+
+  /* State colors */
+  --state-process-bg: #E8EEF9;
+  --state-process-fg: #3A5A9B;
+  --state-pending-bg: #FDF3DC;
+  --state-pending-fg: #8A5A00;
+  --state-success-bg: #E7F5EC;
+  --state-success-fg: #176B3F;
+  --state-error-bg:   #FDECEA;
+  --state-error-fg:   #B42318;
+  --state-neutral-bg: #F3F5F8;
+  --state-neutral-fg: #5B6B7F;
+}
+
+.dark {
+  --background: #07192F;
+  --foreground: #F3F5F8;
+  --card: #0B2545;
+  --card-foreground: #F3F5F8;
+  --muted: #0B2545;
+  --muted-foreground: #9AA8BC;
+  --primary: #4FC9BE;
+  --primary-foreground: #07192F;
+  --secondary: #1F3558;
+  --secondary-foreground: #F3F5F8;
+  --accent: #1F3558;
+  --accent-foreground: #4FC9BE;
+  --destructive: #F4A09A;
+  --destructive-foreground: #07192F;
+  --border: #33486A;
+  --input: #33486A;
+  --ring: #4FC9BE;
+
+  --state-process-fg: #9DB4E6;
+  --state-pending-fg: #F2B134;
+  --state-success-fg: #7FD6A4;
+  --state-error-fg:   #F4A09A;
+  --state-neutral-fg: #9AA8BC;
+  --state-process-bg: color-mix(in srgb, var(--state-process-fg) 16%, var(--card));
+  --state-pending-bg: color-mix(in srgb, var(--state-pending-fg) 16%, var(--card));
+  --state-success-bg: color-mix(in srgb, var(--state-success-fg) 16%, var(--card));
+  --state-error-bg:   color-mix(in srgb, var(--state-error-fg) 16%, var(--card));
+  --state-neutral-bg: color-mix(in srgb, var(--state-neutral-fg) 16%, var(--card));
+}
