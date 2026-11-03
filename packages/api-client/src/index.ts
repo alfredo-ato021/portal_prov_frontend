@@ -130,6 +130,15 @@ export interface FiscalValidationResult {
   validated_at: string;
 }
 
+export interface ERPInvoiceConfirmation {
+  erp_document_id: string;
+  fiscal_year: string;
+  status: string;
+  accounting_document: string;
+  confirmed_at: string;
+  message: string;
+}
+
 export class FactumfluxClient {
   private baseUrl: string;
   private tenantId?: string;
@@ -256,6 +265,13 @@ export class FactumfluxClient {
     return this.fetch('/api/v1/backoffice/service-entry-sheets/upload-csv', {
       method: 'POST',
       body: formData,
+    });
+  }
+
+  // SAP S/4HANA OData posting
+  async postInvoiceToSAP(invoiceId: string): Promise<ERPInvoiceConfirmation> {
+    return this.fetch(`/api/v1/backoffice/invoices/${invoiceId}/post-to-sap`, {
+      method: 'POST',
     });
   }
 }

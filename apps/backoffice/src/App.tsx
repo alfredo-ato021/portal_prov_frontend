@@ -143,6 +143,21 @@ export default function App() {
     }
   };
 
+  const handlePostToSAP = async (invoiceId: string) => {
+    setProcessingInvoiceId(invoiceId);
+    setActionMessage(null);
+    setError(null);
+    try {
+      const res = await client.postInvoiceToSAP(invoiceId);
+      setActionMessage(`SAP S/4HANA: ${res.message} (Asiento: ${res.accounting_document}). Notificación despachada al proveedor.`);
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || 'Error contabilizando en SAP S/4HANA');
+    } finally {
+      setProcessingInvoiceId(null);
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, [activeView]);
@@ -457,6 +472,17 @@ export default function App() {
                               <GitCompare className="w-3 h-3" />
                               Match 3-Way
                             </button>
+                            {(inv.state === 'match' || inv.state === 'validado_sunat') && (
+                              <button
+                                onClick={() => handlePostToSAP(inv.id)}
+                                disabled={processingInvoiceId === inv.id}
+                                className="px-2 py-1 bg-[#0B2545] hover:bg-[#15345C] text-white rounded text-[11px] font-medium inline-flex items-center gap-1 transition-colors disabled:opacity-50"
+                                title="Contabilizar directamente en SAP S/4HANA (API_SUPPLIERINVOICE_PROCESS_SRV)"
+                              >
+                                <Layers className="w-3 h-3 text-[#4FC9BE]" />
+                                Contabilizar SAP
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
