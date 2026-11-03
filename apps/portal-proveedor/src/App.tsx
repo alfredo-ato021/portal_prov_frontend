@@ -138,11 +138,10 @@ export default function App() {
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-[10px] p-8 text-center transition-colors cursor-pointer group ${
-              isDragging
-                ? 'border-[#0A7469] bg-[#0A7469]/10'
-                : 'border-[var(--input)] hover:border-[#0A7469] bg-[var(--accent)]/30'
-            }`}
+            className={`border-2 border-dashed rounded-[10px] p-8 text-center transition-colors cursor-pointer group ${isDragging
+              ? 'border-[#0A7469] bg-[#0A7469]/10'
+              : 'border-[var(--input)] hover:border-[#0A7469] bg-[var(--accent)]/30'
+              }`}
           >
             <UploadCloud className="w-10 h-10 text-[#0A7469] mx-auto mb-3 group-hover:scale-105 transition-transform" />
             <p className="text-sm font-medium mb-1">

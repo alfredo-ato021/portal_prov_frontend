@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Building2,
   Layers,
@@ -13,12 +13,22 @@ import {
   RefreshCw,
   GitCompare,
   FileCheck,
+  ShoppingCart,
+  UploadCloud,
+  FileSpreadsheet,
+  X,
 } from 'lucide-react';
 import { StatusChip } from '@factumflux/ui';
-import { FactumfluxClient, InvoiceSummary, TenantSummary } from '@factumflux/api-client';
+import { FactumfluxClient, InvoiceSummary, TenantSummary, PurchaseOrder } from '@factumflux/api-client';
 import { t, formatCurrency, formatDate } from '@factumflux/i18n';
 
-type ActiveView = 'tenant_dashboard' | 'superadmin_tenants' | 'superadmin_jit' | 'superadmin_audit' | 'superadmin_plans';
+type ActiveView =
+  | 'tenant_dashboard'
+  | 'tenant_orders'
+  | 'superadmin_tenants'
+  | 'superadmin_jit'
+  | 'superadmin_audit'
+  | 'superadmin_plans';
 
 const client = new FactumfluxClient({
   baseUrl: 'http://localhost:8080',
@@ -28,17 +38,79 @@ const client = new FactumfluxClient({
 export default function App() {
   const [activeView, setActiveView] = useState<ActiveView>('tenant_dashboard');
   const [invoices, setInvoices] = useState<InvoiceSummary[]>([]);
+  const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [tenants, setTenants] = useState<TenantSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [processingInvoiceId, setProcessingInvoiceId] = useState<string | null>(null);
 
+  // CSV Ingestion modal state
+  const [isIngestingCSV, setIsIngestingCSV] = useState(false);
+  const [csvType, setCsvType] = useState<'po' | 'gr' | 'ses'>('po');
+  const [isUploadingCSV, setIsUploadingCSV] = useState(false);
+  const csvFileInputRef = useRef<HTMLInputElement>(null);
+
   // New tenant modal state
   const [isCreatingTenant, setIsCreatingTenant] = useState(false);
   const [newTenantName, setNewTenantName] = useState('');
   const [newTenantSlug, setNewTenantSlug] = useState('');
   const [newTenantRUC, setNewTenantRUC] = useState('');
+
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (activeView === 'tenant_dashboard') {
+        const data = await client.listBackofficeInvoices();
+        setInvoices(data);
+      } else if (activeView === 'tenant_orders') {
+        const data = await client.listPurchaseOrders();
+        setOrders(data);
+      } else if (activeView === 'superadmin_tenants') {
+        const data = await client.listTenants();
+        setTenants(data);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Error conectando con la API.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCSVUpload = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.csv') && !file.name.toLowerCase().endsWith('.txt')) {
+      setError('Solo se admiten archivos delimitados en formato CSV (.csv).');
+      return;
+    }
+
+    setIsUploadingCSV(true);
+    setActionMessage(null);
+    setError(null);
+
+    try {
+      let res;
+      if (csvType === 'po') {
+        res = await client.uploadPurchaseOrdersCSV(file);
+      } else if (csvType === 'gr') {
+        res = await client.uploadGoodsReceiptsCSV(file);
+      } else {
+        res = await client.uploadServiceEntrySheetsCSV(file);
+      }
+
+      const warnings = res.errors && res.errors.length > 0 ? ` (Alertas: ${res.errors.join('; ')})` : '';
+      setActionMessage(`Ingesta completada: ${res.inserted_count} registros procesados e integrados exitosamente con RLS.${warnings}`);
+      setIsIngestingCSV(false);
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || 'Error al procesar el archivo CSV en el servidor.');
+    } finally {
+      setIsUploadingCSV(false);
+      if (csvFileInputRef.current) {
+        csvFileInputRef.current.value = '';
+      }
+    }
+  };
 
   const handleValidateSUNAT = async (invoiceId: string) => {
     setProcessingInvoiceId(invoiceId);
@@ -71,24 +143,6 @@ export default function App() {
     }
   };
 
-  const loadData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      if (activeView === 'tenant_dashboard') {
-        const data = await client.listBackofficeInvoices();
-        setInvoices(data);
-      } else if (activeView === 'superadmin_tenants') {
-        const data = await client.listTenants();
-        setTenants(data);
-      }
-    } catch (err: any) {
-      setError(err?.message || 'Error conectando con la API.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     loadData();
   }, [activeView]);
@@ -116,6 +170,18 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] font-sans flex flex-col">
+      {/* Hidden file input for CSV Ingestion */}
+      <input
+        type="file"
+        ref={csvFileInputRef}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleCSVUpload(file);
+        }}
+        accept=".csv,.txt"
+        className="hidden"
+      />
+
       {/* ── TOPBAR ───────────────────────────────────────────────────────── */}
       <header className="border-b border-[var(--border)] bg-[var(--card)] px-6 py-3.5 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -139,7 +205,17 @@ export default function App() {
                     : 'text-[var(--muted-foreground)] hover:text-[#0B2545]'
                 }`}
               >
-                Panel Cliente
+                Facturas Recibidas
+              </button>
+              <button
+                onClick={() => setActiveView('tenant_orders')}
+                className={`px-3 py-1.5 rounded-md transition-colors ${
+                  activeView === 'tenant_orders'
+                    ? 'bg-white shadow-xs text-[#0B2545] font-semibold'
+                    : 'text-[var(--muted-foreground)] hover:text-[#0B2545]'
+                }`}
+              >
+                Órdenes de Compra (ERP)
               </button>
               <button
                 onClick={() => setActiveView('superadmin_tenants')}
@@ -156,11 +232,20 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4 text-sm">
-            {activeView === 'tenant_dashboard' ? (
-              <div className="flex items-center gap-2 bg-[var(--muted)] px-3 py-1.5 rounded-md border border-[var(--border)]">
-                <Building2 className="w-4 h-4 text-[#0A7469]" />
-                <span className="font-medium text-xs">La Bodega de la Trattoria S.A.C.</span>
-                <span className="text-[11px] text-[var(--muted-foreground)] font-mono">(20501234567)</span>
+            {!activeView.startsWith('superadmin') ? (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setIsIngestingCSV(true)}
+                  className="px-3 py-1.5 bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-semibold rounded-md transition-colors inline-flex items-center gap-1.5 shadow-xs"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  + Ingesta CSV ERP
+                </button>
+                <div className="flex items-center gap-2 bg-[var(--muted)] px-3 py-1.5 rounded-md border border-[var(--border)]">
+                  <Building2 className="w-4 h-4 text-[#0A7469]" />
+                  <span className="font-medium text-xs">La Bodega de la Trattoria S.A.C.</span>
+                  <span className="text-[11px] text-[var(--muted-foreground)] font-mono">(20501234567)</span>
+                </div>
               </div>
             ) : (
               <div className="flex items-center gap-2 bg-[#E8F4F2] text-[#0A7469] px-3 py-1.5 rounded-md border border-[#CBE9E5] text-xs font-semibold">
@@ -379,6 +464,183 @@ export default function App() {
                   </tbody>
                 </table>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* VIEW 1.2: CLIENT PURCHASE ORDERS (ERP INGESTED) */}
+        {activeView === 'tenant_orders' && (
+          <div>
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h1 className="text-2xl font-bold">Órdenes de Compra (ERP)</h1>
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  Órdenes de compra y servicio sincronizadas desde el ERP del cliente con validación RLS.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsIngestingCSV(true)}
+                className="px-4 py-2 bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-semibold rounded-md shadow-xs transition-colors flex items-center gap-1.5"
+              >
+                <FileSpreadsheet className="w-4 h-4" /> Ingestar Archivo CSV
+              </button>
+            </div>
+
+            {/* Action Message Banner */}
+            {actionMessage && (
+              <div className="mb-6 p-4 rounded-lg bg-[#E8F4F2] border border-[#CBE9E5] text-[#0A7469] text-xs flex items-center justify-between">
+                <span className="font-medium">{actionMessage}</span>
+                <button onClick={() => setActionMessage(null)} className="underline font-semibold ml-4">Cerrar</button>
+              </div>
+            )}
+
+            {/* Orders Table */}
+            <div className="bg-white border border-[var(--border)] rounded-[10px] shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-[var(--border)] flex justify-between items-center">
+                <span className="font-semibold text-sm">Registro de Órdenes (OC / OS)</span>
+              </div>
+
+              {loading ? (
+                <div className="p-12 text-center text-sm text-[var(--muted-foreground)] flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-[#0A7469]" />
+                  <span>Consultando órdenes en Neon DB...</span>
+                </div>
+              ) : orders.length === 0 ? (
+                <div className="p-12 text-center text-xs text-[var(--muted-foreground)]">
+                  <p className="font-semibold text-[var(--foreground)]">No hay órdenes de compra registradas</p>
+                  <p className="text-xs mt-1">Utiliza el botón superior para subir un archivo CSV exportado desde tu ERP.</p>
+                </div>
+              ) : (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--border)] bg-[var(--muted)]/50 text-[var(--muted-foreground)] uppercase font-medium">
+                      <th className="py-3 px-6">N° Orden</th>
+                      <th className="py-3 px-6">Proveedor</th>
+                      <th className="py-3 px-6">Fecha Emisión</th>
+                      <th className="py-3 px-6 text-right">Subtotal</th>
+                      <th className="py-3 px-6 text-right">Total</th>
+                      <th className="py-3 px-6 text-center">Ref. ERP</th>
+                      <th className="py-3 px-6 text-center">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border)]">
+                    {orders.map((po) => (
+                      <tr key={po.id} className="hover:bg-[var(--muted)]/40 transition-colors">
+                        <td className="py-4 px-6 font-mono font-medium">{po.po_number}</td>
+                        <td className="py-4 px-6">
+                          <span className="font-medium">{po.supplier_name}</span>
+                          <span className="block text-[11px] text-[var(--muted-foreground)] font-mono">RUC: {po.supplier_ruc}</span>
+                        </td>
+                        <td className="py-4 px-6 text-[var(--muted-foreground)]">{formatDate(po.issue_date)}</td>
+                        <td className="py-4 px-6 text-right font-mono">{formatCurrency(po.subtotal, po.currency)}</td>
+                        <td className="py-4 px-6 text-right font-mono font-semibold">{formatCurrency(po.total_amount, po.currency)}</td>
+                        <td className="py-4 px-6 text-center font-mono text-[11px] text-[var(--muted-foreground)]">{po.erp_reference || '—'}</td>
+                        <td className="py-4 px-6 text-center">
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#E7F5EC] text-[#176B3F] uppercase">
+                            {po.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* CSV Ingestion Modal */}
+        {isIngestingCSV && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 border border-[var(--border)] animate-in fade-in zoom-in-95">
+              <div className="flex justify-between items-center mb-3">
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet className="w-5 h-5 text-[#0A7469]" />
+                  <h3 className="text-base font-bold text-[#0B2545]">Ingesta Masiva desde ERP (CSV)</h3>
+                </div>
+                <button onClick={() => setIsIngestingCSV(false)} className="text-[var(--muted-foreground)] hover:text-black">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <p className="text-xs text-[var(--muted-foreground)] mb-4">
+                Selecciona el tipo de documento del ERP que deseas sincronizar en el tenant activo:
+              </p>
+
+              <div className="grid grid-cols-3 gap-2 mb-5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setCsvType('po')}
+                  className={`p-3 rounded-lg border text-center transition-all ${
+                    csvType === 'po'
+                      ? 'border-[#0A7469] bg-[#E8F4F2] text-[#0A7469] font-bold shadow-xs'
+                      : 'border-[var(--border)] hover:bg-[var(--muted)] text-[var(--muted-foreground)]'
+                  }`}
+                >
+                  <ShoppingCart className="w-4 h-4 mx-auto mb-1" />
+                  Órdenes (OC/OS)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCsvType('gr')}
+                  className={`p-3 rounded-lg border text-center transition-all ${
+                    csvType === 'gr'
+                      ? 'border-[#0A7469] bg-[#E8F4F2] text-[#0A7469] font-bold shadow-xs'
+                      : 'border-[var(--border)] hover:bg-[var(--muted)] text-[var(--muted-foreground)]'
+                  }`}
+                >
+                  <Layers className="w-4 h-4 mx-auto mb-1" />
+                  Almacén (MIGO)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCsvType('ses')}
+                  className={`p-3 rounded-lg border text-center transition-all ${
+                    csvType === 'ses'
+                      ? 'border-[#0A7469] bg-[#E8F4F2] text-[#0A7469] font-bold shadow-xs'
+                      : 'border-[var(--border)] hover:bg-[var(--muted)] text-[var(--muted-foreground)]'
+                  }`}
+                >
+                  <FileCheck className="w-4 h-4 mx-auto mb-1" />
+                  Servicios (HES)
+                </button>
+              </div>
+
+              <div
+                onClick={() => csvFileInputRef.current?.click()}
+                className="border-2 border-dashed border-[var(--input)] hover:border-[#0A7469] bg-[var(--accent)]/30 rounded-lg p-6 text-center cursor-pointer transition-colors mb-4 group"
+              >
+                <UploadCloud className="w-8 h-8 text-[#0A7469] mx-auto mb-2 group-hover:scale-105 transition-transform" />
+                <p className="text-xs font-semibold text-[#0B2545] mb-1">
+                  {isUploadingCSV ? 'Procesando archivo CSV...' : 'Haz clic para seleccionar el archivo CSV'}
+                </p>
+                <p className="text-[11px] text-[var(--muted-foreground)]">
+                  Admite delimitador por coma (,) o punto y coma (;). Codificación UTF-8.
+                </p>
+              </div>
+
+              <div className="bg-[var(--muted)] p-3 rounded-lg text-[11px] text-[var(--muted-foreground)] space-y-1 mb-4 font-mono">
+                <span className="font-bold font-sans text-xs text-[#0B2545] block mb-1">Formato de encabezado requerido:</span>
+                {csvType === 'po' && (
+                  <code>po_number, supplier_ruc, issue_date, currency, subtotal, tax_amount, total_amount, erp_reference</code>
+                )}
+                {csvType === 'gr' && (
+                  <code>po_number, receipt_number, receipt_date, erp_migo_number</code>
+                )}
+                {csvType === 'ses' && (
+                  <code>po_number, ses_number, approval_date, total_amount, currency, erp_hes_number, status</code>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setIsIngestingCSV(false)}
+                  className="px-3 py-1.5 border border-[var(--border)] rounded text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
+                >
+                  Cancelar
+                </button>
+              </div>
             </div>
           </div>
         )}

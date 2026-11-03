@@ -55,10 +55,22 @@ export interface InvoiceSummary {
 export interface PurchaseOrder {
   id: string;
   po_number: string;
+  supplier_ruc: string;
+  supplier_name: string;
   issue_date: string;
   currency: string;
+  subtotal: number;
+  tax_amount: number;
   total_amount: number;
   status: string;
+  erp_reference?: string;
+}
+
+export interface IngestSummary {
+  processed_count: number;
+  inserted_count: number;
+  updated_count: number;
+  errors?: string[];
 }
 
 export interface JITSessionRequest {
@@ -212,6 +224,38 @@ export class FactumfluxClient {
   async runInvoiceMatch(invoiceId: string): Promise<MatchingResult> {
     return this.fetch(`/api/v1/backoffice/invoices/${invoiceId}/match`, {
       method: 'POST',
+    });
+  }
+
+  // ERP Purchase Orders & Receipts Ingest
+  async listPurchaseOrders(): Promise<PurchaseOrder[]> {
+    return this.fetch('/api/v1/backoffice/purchase-orders');
+  }
+
+  async uploadPurchaseOrdersCSV(file: File): Promise<IngestSummary> {
+    const formData = new FormData();
+    formData.append('csv_file', file);
+    return this.fetch('/api/v1/backoffice/purchase-orders/upload-csv', {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
+  async uploadGoodsReceiptsCSV(file: File): Promise<IngestSummary> {
+    const formData = new FormData();
+    formData.append('csv_file', file);
+    return this.fetch('/api/v1/backoffice/goods-receipts/upload-csv', {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
+  async uploadServiceEntrySheetsCSV(file: File): Promise<IngestSummary> {
+    const formData = new FormData();
+    formData.append('csv_file', file);
+    return this.fetch('/api/v1/backoffice/service-entry-sheets/upload-csv', {
+      method: 'POST',
+      body: formData,
     });
   }
 }
