@@ -6,6 +6,7 @@
   "scripts": {
     "dev:proveedor": "pnpm --filter @factumflux/portal-proveedor dev",
     "dev:backoffice": "pnpm --filter @factumflux/backoffice dev",
+    "dev:landing": "pnpm --filter @factumflux/landing dev",
     "build": "pnpm --recursive run build",
     "lint": "pnpm --recursive run lint",
     "typecheck": "pnpm --recursive run typecheck"

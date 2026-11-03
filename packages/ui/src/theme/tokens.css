@@ -62,3 +62,4 @@
   --state-error-bg:   color-mix(in srgb, var(--state-error-fg) 16%, var(--card));
   --state-neutral-bg: color-mix(in srgb, var(--state-neutral-fg) 16%, var(--card));
 }
+
