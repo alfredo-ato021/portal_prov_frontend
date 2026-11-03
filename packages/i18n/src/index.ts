@@ -65,3 +65,4 @@ export function formatDate(dateStr: string, locale: string = 'es-PE'): string {
 
 export { es419 };
 export type { TranslationDictionary };
+

@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { StatusChip } from '@factumflux/ui';
 import { FactumfluxClient, InvoiceSummary } from '@factumflux/api-client';
 import { t, formatCurrency, formatDate } from '@factumflux/i18n';
-import { UploadCloud, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { UploadCloud, Loader2, AlertCircle, RefreshCw, CheckCircle2 } from 'lucide-react';
 
 const client = new FactumfluxClient({
   baseUrl: 'http://localhost:8080',
@@ -13,7 +13,10 @@ export default function App() {
   const [invoices, setInvoices] = useState<InvoiceSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchInvoices = async () => {
     setLoading(true);
@@ -33,16 +36,69 @@ export default function App() {
   }, []);
 
   const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFile = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.xml')) {
+      setError('Solo se admiten comprobantes electrónicos en formato XML UBL 2.1.');
+      return;
+    }
+
     setIsUploading(true);
-    // Simula apertura de selector de archivos nativo con feedback visual controlado
-    setTimeout(() => {
+    setError(null);
+    setUploadSuccess(null);
+
+    try {
+      const result = await client.uploadSupplierInvoiceXML(file);
+      setUploadSuccess(`Comprobante ${result.series}-${result.number} cargado exitosamente (Estado: ${result.state}).`);
+      await fetchInvoices();
+    } catch (err: any) {
+      setError(err?.message || 'Error al procesar y subir el comprobante XML.');
+    } finally {
       setIsUploading(false);
-      alert('Selector de archivos: Selecciona tu archivo XML UBL 2.1 y la representación impresa en PDF.');
-    }, 400);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFile(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      handleFile(file);
+    }
   };
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] font-sans">
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept=".xml"
+        className="hidden"
+      />
+
       {/* Top Header */}
       <header className="border-b border-[var(--border)] bg-[var(--card)] px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
@@ -62,6 +118,14 @@ export default function App() {
 
       {/* Main Container */}
       <main className="max-w-5xl mx-auto px-6 py-8">
+        {/* Alerts */}
+        {uploadSuccess && (
+          <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-[10px] text-sm flex items-center gap-3 shadow-sm animate-in fade-in">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+            <span className="font-medium">{uploadSuccess}</span>
+          </div>
+        )}
+
         {/* Upload Hero Section */}
         <section className="bg-[var(--card)] border border-[var(--border)] rounded-[10px] p-6 shadow-sm mb-8">
           <h1 className="text-2xl font-semibold mb-2">{t('supplier.upload_title')}</h1>
@@ -71,7 +135,14 @@ export default function App() {
 
           <div
             onClick={handleUploadClick}
-            className="border-2 border-dashed border-[var(--input)] hover:border-[#0A7469] rounded-[10px] p-8 text-center transition-colors cursor-pointer bg-[var(--accent)]/30 group"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`border-2 border-dashed rounded-[10px] p-8 text-center transition-colors cursor-pointer group ${
+              isDragging
+                ? 'border-[#0A7469] bg-[#0A7469]/10'
+                : 'border-[var(--input)] hover:border-[#0A7469] bg-[var(--accent)]/30'
+            }`}
           >
             <UploadCloud className="w-10 h-10 text-[#0A7469] mx-auto mb-3 group-hover:scale-105 transition-transform" />
             <p className="text-sm font-medium mb-1">
@@ -81,11 +152,12 @@ export default function App() {
               {t('supplier.dropzone_help')}
             </p>
             <button
+              type="button"
               disabled={isUploading}
               className="mt-4 px-4 py-2 bg-[#0A7469] text-white text-sm font-medium rounded-md hover:bg-[#075A52] transition-colors disabled:opacity-50 inline-flex items-center gap-2"
             >
               {isUploading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {t('supplier.upload_button')}
+              {isUploading ? 'Procesando XML...' : t('supplier.upload_button')}
             </button>
           </div>
         </section>

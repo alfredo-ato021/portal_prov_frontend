@@ -104,10 +104,13 @@ export class FactumfluxClient {
 
   private async fetch<T>(path: string, options: RequestInit = {}): Promise<T> {
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       Accept: 'application/json',
       ...(options.headers as Record<string, string>),
     };
+
+    if (!(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
 
     if (this.tenantId) {
       headers['X-Tenant-Id'] = this.tenantId;
@@ -158,4 +161,14 @@ export class FactumfluxClient {
   async listSupplierInvoices(): Promise<InvoiceSummary[]> {
     return this.fetch('/api/v1/supplier/invoices');
   }
+
+  async uploadSupplierInvoiceXML(file: File): Promise<InvoiceSummary> {
+    const formData = new FormData();
+    formData.append('xml_file', file);
+    return this.fetch('/api/v1/supplier/invoices/upload', {
+      method: 'POST',
+      body: formData,
+    });
+  }
 }
+
