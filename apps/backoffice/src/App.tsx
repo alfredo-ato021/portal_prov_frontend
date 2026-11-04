@@ -17,14 +17,26 @@ import {
   UploadCloud,
   FileSpreadsheet,
   X,
+  Clock,
+  AlertTriangle,
+  Calendar,
 } from 'lucide-react';
 import { StatusChip } from '@factumflux/ui';
-import { FactumfluxClient, InvoiceSummary, TenantSummary, PurchaseOrder } from '@factumflux/api-client';
+import {
+  FactumfluxClient,
+  InvoiceSummary,
+  TenantSummary,
+  PurchaseOrder,
+  NegotiableAlert,
+  SIREComparisonResult,
+} from '@factumflux/api-client';
 import { t, formatCurrency, formatDate } from '@factumflux/i18n';
 
 type ActiveView =
   | 'tenant_dashboard'
   | 'tenant_orders'
+  | 'tenant_sire'
+  | 'tenant_alerts'
   | 'superadmin_tenants'
   | 'superadmin_jit'
   | 'superadmin_audit'
@@ -51,6 +63,12 @@ export default function App() {
   const [isUploadingCSV, setIsUploadingCSV] = useState(false);
   const csvFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Negotiable alerts & SIRE state
+  const [alerts, setAlerts] = useState<NegotiableAlert[]>([]);
+  const [sireData, setSireData] = useState<SIREComparisonResult | null>(null);
+  const [sirePeriod, setSirePeriod] = useState('2026-11');
+  const [isComparingSire, setIsComparingSire] = useState(false);
+
   // New tenant modal state
   const [isCreatingTenant, setIsCreatingTenant] = useState(false);
   const [newTenantName, setNewTenantName] = useState('');
@@ -62,11 +80,23 @@ export default function App() {
     setError(null);
     try {
       if (activeView === 'tenant_dashboard') {
-        const data = await client.listBackofficeInvoices();
-        setInvoices(data);
+        const [invData, alertData] = await Promise.all([
+          client.listBackofficeInvoices(),
+          client.listNegotiableAlerts().catch(() => []),
+        ]);
+        setInvoices(invData);
+        setAlerts(alertData);
       } else if (activeView === 'tenant_orders') {
         const data = await client.listPurchaseOrders();
         setOrders(data);
+      } else if (activeView === 'tenant_sire') {
+        setIsComparingSire(true);
+        const data = await client.compareSIRE(sirePeriod);
+        setSireData(data);
+        setIsComparingSire(false);
+      } else if (activeView === 'tenant_alerts') {
+        const data = await client.listNegotiableAlerts();
+        setAlerts(data);
       } else if (activeView === 'superadmin_tenants') {
         const data = await client.listTenants();
         setTenants(data);
@@ -75,6 +105,21 @@ export default function App() {
       setError(err?.message || 'Error conectando con la API.');
     } finally {
       setLoading(false);
+      setIsComparingSire(false);
+    }
+  };
+
+  const handleRunSireCompare = async (period: string) => {
+    setIsComparingSire(true);
+    setError(null);
+    try {
+      const data = await client.compareSIRE(period);
+      setSireData(data);
+      setActionMessage(`Conciliación SIRE completada para el periodo ${period}.`);
+    } catch (err: any) {
+      setError(err?.message || 'Error al conciliar con SIRE SUNAT.');
+    } finally {
+      setIsComparingSire(false);
     }
   };
 
@@ -231,6 +276,33 @@ export default function App() {
                 }`}
               >
                 Órdenes de Compra (ERP)
+              </button>
+              <button
+                onClick={() => setActiveView('tenant_sire')}
+                className={`px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${
+                  activeView === 'tenant_sire'
+                    ? 'bg-white shadow-xs text-[#0B2545] font-semibold'
+                    : 'text-[var(--muted-foreground)] hover:text-[#0B2545]'
+                }`}
+              >
+                <GitCompare className="w-3.5 h-3.5 text-[#0A7469]" />
+                Conciliación SIRE
+              </button>
+              <button
+                onClick={() => setActiveView('tenant_alerts')}
+                className={`px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${
+                  activeView === 'tenant_alerts'
+                    ? 'bg-white shadow-xs text-[#0B2545] font-semibold'
+                    : 'text-[var(--muted-foreground)] hover:text-[#0B2545]'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5 text-[#0A7469]" />
+                Factura Negociable (8 Días)
+                {alerts.filter((a) => a.is_urgent).length > 0 && (
+                  <span className="bg-rose-600 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full animate-pulse">
+                    {alerts.filter((a) => a.is_urgent).length}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => setActiveView('superadmin_tenants')}
@@ -565,6 +637,339 @@ export default function App() {
                           <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#E7F5EC] text-[#176B3F] uppercase">
                             {po.status}
                           </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* VIEW 1.3: SIRE SUNAT RECONCILIATION */}
+        {activeView === 'tenant_sire' && (
+          <div>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+              <div>
+                <h1 className="text-2xl font-bold text-[#0B2545] flex items-center gap-2">
+                  <GitCompare className="w-6 h-6 text-[#0A7469]" />
+                  Conciliación con Propuesta SIRE SUNAT (RCE)
+                </h1>
+                <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                  Cruce automático de compras registradas en Factumflux contra la propuesta RCE (Registro de Compras Electrónico) de SUNAT.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs">
+                  <Calendar className="w-4 h-4 text-[#0A7469]" />
+                  <span className="font-semibold text-[#0B2545]">Periodo:</span>
+                  <input
+                    type="text"
+                    value={sirePeriod}
+                    onChange={(e) => setSirePeriod(e.target.value)}
+                    placeholder="YYYY-MM"
+                    className="border border-[var(--border)] rounded px-2 py-1 w-24 text-xs font-mono focus:outline-none focus:border-[#0A7469]"
+                  />
+                </div>
+                <button
+                  onClick={() => handleRunSireCompare(sirePeriod)}
+                  disabled={isComparingSire}
+                  className="px-4 py-2 bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-semibold rounded-md shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isComparingSire ? 'animate-spin' : ''}`} />
+                  {isComparingSire ? 'Consultando SIRE...' : 'Ejecutar Cruce'}
+                </button>
+              </div>
+            </div>
+
+            {/* Action or Error Message */}
+            {actionMessage && (
+              <div className="mb-6 p-4 rounded-lg bg-[#E8F4F2] border border-[#CBE9E5] text-[#0A7469] text-xs flex items-center justify-between">
+                <span className="font-medium">{actionMessage}</span>
+                <button onClick={() => setActionMessage(null)} className="underline font-semibold ml-4">Cerrar</button>
+              </div>
+            )}
+
+            {/* KPI Cards */}
+            {sireData && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div className="bg-white border border-[var(--border)] rounded-[10px] p-4 shadow-xs">
+                  <span className="text-[11px] uppercase font-medium text-[var(--muted-foreground)] block mb-1">
+                    Comprobantes Portal
+                  </span>
+                  <div className="text-2xl font-bold font-mono text-[#0B2545]">
+                    {sireData.total_portal_invoices}
+                  </div>
+                  <span className="text-[11px] text-[var(--muted-foreground)]">Registrados en RVA</span>
+                </div>
+
+                <div className="bg-white border border-[var(--border)] rounded-[10px] p-4 shadow-xs">
+                  <span className="text-[11px] uppercase font-medium text-[var(--muted-foreground)] block mb-1">
+                    Propuesta SIRE
+                  </span>
+                  <div className="text-2xl font-bold font-mono text-[#0B2545]">
+                    {sireData.total_sire_proposals}
+                  </div>
+                  <span className="text-[11px] text-[var(--muted-foreground)]">Propuestos por SUNAT</span>
+                </div>
+
+                <div className="bg-white border border-[#CBE9E5] bg-[#F4FAF9] rounded-[10px] p-4 shadow-xs">
+                  <span className="text-[11px] uppercase font-medium text-[#0A7469] block mb-1">
+                    100% Coincidentes
+                  </span>
+                  <div className="text-2xl font-bold font-mono text-[#0A7469]">
+                    {sireData.matched_count}
+                  </div>
+                  <span className="text-[11px] text-[#0A7469]">Listos para aprobación RCE</span>
+                </div>
+
+                <div className="bg-white border border-amber-200 bg-amber-50/50 rounded-[10px] p-4 shadow-xs">
+                  <span className="text-[11px] uppercase font-medium text-amber-800 block mb-1">
+                    Faltantes en SIRE / Portal
+                  </span>
+                  <div className="text-2xl font-bold font-mono text-amber-800">
+                    {sireData.missing_in_sire_count + sireData.missing_in_portal_count}
+                  </div>
+                  <span className="text-[11px] text-amber-700">Requieren aclaración fiscal</span>
+                </div>
+              </div>
+            )}
+
+            {/* Reconciliation Table */}
+            <div className="bg-white border border-[var(--border)] rounded-[10px] shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-[var(--border)] flex justify-between items-center">
+                <span className="font-semibold text-sm">Detalle de Comprobantes vs Propuesta SIRE ({sirePeriod})</span>
+                {sireData && (
+                  <span className="text-xs text-[var(--muted-foreground)] font-mono">
+                    Total evaluados: {sireData.items.length}
+                  </span>
+                )}
+              </div>
+
+              {loading || isComparingSire ? (
+                <div className="p-12 text-center text-sm text-[var(--muted-foreground)] flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-[#0A7469]" />
+                  <span>Cruzando comprobantes con el servicio SIRE...</span>
+                </div>
+              ) : !sireData || sireData.items.length === 0 ? (
+                <div className="p-12 text-center text-xs text-[var(--muted-foreground)]">
+                  <GitCompare className="w-8 h-8 text-[var(--muted-foreground)] mx-auto mb-2 opacity-50" />
+                  <p className="font-semibold text-[var(--foreground)]">No hay registros de cruce para este periodo</p>
+                  <p className="text-xs mt-1">Haz clic en "Ejecutar Cruce" para comparar los comprobantes activos con la propuesta SIRE.</p>
+                </div>
+              ) : (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--border)] bg-[var(--muted)]/50 text-[var(--muted-foreground)] uppercase font-medium">
+                      <th className="py-3 px-6">Comprobante</th>
+                      <th className="py-3 px-6">RUC Emisor</th>
+                      <th className="py-3 px-6 text-right">Monto Portal</th>
+                      <th className="py-3 px-6 text-right">Monto SIRE SUNAT</th>
+                      <th className="py-3 px-6 text-center">Estado del Cruce</th>
+                      <th className="py-3 px-6">Diagnóstico / Acción Fiscal</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border)]">
+                    {sireData.items.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-[var(--muted)]/40 transition-colors">
+                        <td className="py-4 px-6 font-mono font-medium">{item.document_ref}</td>
+                        <td className="py-4 px-6 font-mono">{item.supplier_ruc}</td>
+                        <td className="py-4 px-6 text-right font-mono">
+                          {item.portal_total !== undefined ? formatCurrency(item.portal_total, 'PEN') : '—'}
+                        </td>
+                        <td className="py-4 px-6 text-right font-mono">
+                          {item.sire_total !== undefined ? formatCurrency(item.sire_total, 'PEN') : '—'}
+                        </td>
+                        <td className="py-4 px-6 text-center">
+                          {item.status === 'match' && (
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#E7F5EC] text-[#176B3F]">
+                              COINCIDENTE
+                            </span>
+                          )}
+                          {item.status === 'missing_in_sire' && (
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800">
+                              NO EN SIRE
+                            </span>
+                          )}
+                          {item.status === 'missing_in_portal' && (
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-800">
+                              PENDIENTE EN PORTAL
+                            </span>
+                          )}
+                          {item.status === 'amount_mismatch' && (
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800">
+                              DESCUADRE DE MONTO
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-4 px-6 text-xs text-[var(--muted-foreground)]">
+                          {item.message || 'Conciliación conforme; habilitado para propuesta RCE.'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* VIEW 1.4: FACTURA NEGOCIABLE CONFORMITY DEADLINE MONITOR */}
+        {activeView === 'tenant_alerts' && (
+          <div>
+            <div className="mb-6">
+              <h1 className="text-2xl font-bold text-[#0B2545] flex items-center gap-2">
+                <Clock className="w-6 h-6 text-[#0A7469]" />
+                Monitoreo de Facturas Negociables (8 Días Calendario)
+              </h1>
+              <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                Control perentorio de conformidad presunta según Ley N° 29623 y R.S. N° 000150-2021/SUNAT para comprobantes al crédito.
+              </p>
+            </div>
+
+            {/* Alert Banner */}
+            <div className="mb-6 p-4 rounded-xl border border-amber-200 bg-amber-50/70 text-amber-900 text-xs flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block mb-1">Riesgo Legal y Tributario de Conformidad Presunta:</span>
+                <p className="leading-relaxed">
+                  Las facturas electrónicas emitidas al crédito adquieren mérito ejecutivo y conformidad irrevocable si no son observadas formalmente en la plataforma SUNAT dentro de los <strong>8 días calendario</strong> posteriores a su recepción. Si un comprobante presenta discrepancias en el 3-Way Match y restan menos de 48 horas, debe gestionarse el reclamo de inmediato para salvaguardar el derecho a diferir o impugnar el pago.
+                </p>
+              </div>
+            </div>
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+              <div className="bg-white border border-[var(--border)] rounded-[10px] p-4 shadow-xs">
+                <span className="text-[11px] uppercase font-medium text-[var(--muted-foreground)] block mb-1">
+                  Facturas al Crédito
+                </span>
+                <div className="text-2xl font-bold font-mono text-[#0B2545]">
+                  {alerts.length}
+                </div>
+                <span className="text-[11px] text-[var(--muted-foreground)]">En seguimiento activo</span>
+              </div>
+
+              <div className="bg-white border border-rose-300 bg-rose-50/60 rounded-[10px] p-4 shadow-xs">
+                <span className="text-[11px] uppercase font-medium text-rose-800 block mb-1">
+                  Urgentes (&le; 48 Horas)
+                </span>
+                <div className="text-2xl font-bold font-mono text-rose-800 flex items-center gap-2">
+                  {alerts.filter((a) => a.is_urgent).length}
+                  {alerts.filter((a) => a.is_urgent).length > 0 && (
+                    <span className="text-xs bg-rose-600 text-white font-semibold px-2 py-0.5 rounded-full animate-pulse">
+                      ACCIÓN REQUERIDA
+                    </span>
+                  )}
+                </div>
+                <span className="text-[11px] text-rose-700">Riesgo inminente de conformidad</span>
+              </div>
+
+              <div className="bg-white border border-[var(--border)] rounded-[10px] p-4 shadow-xs">
+                <span className="text-[11px] uppercase font-medium text-[var(--muted-foreground)] block mb-1">
+                  En Plazo Regular (&gt; 48h)
+                </span>
+                <div className="text-2xl font-bold font-mono text-[#0A7469]">
+                  {alerts.filter((a) => !a.is_urgent && a.hours_remaining > 0).length}
+                </div>
+                <span className="text-[11px] text-[var(--muted-foreground)]">Dentro de ventana de revisión</span>
+              </div>
+
+              <div className="bg-white border border-[var(--border)] rounded-[10px] p-4 shadow-xs">
+                <span className="text-[11px] uppercase font-medium text-[var(--muted-foreground)] block mb-1">
+                  Conformidad Presunta Cumplida
+                </span>
+                <div className="text-2xl font-bold font-mono text-[#0B2545]">
+                  {alerts.filter((a) => a.hours_remaining <= 0).length}
+                </div>
+                <span className="text-[11px] text-[var(--muted-foreground)]">Mérito ejecutivo adquirido</span>
+              </div>
+            </div>
+
+            {/* Alerts Table */}
+            <div className="bg-white border border-[var(--border)] rounded-[10px] shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-[var(--border)] flex justify-between items-center">
+                <span className="font-semibold text-sm">Cronómetro de Conformidad por Comprobante</span>
+              </div>
+
+              {loading ? (
+                <div className="p-12 text-center text-sm text-[var(--muted-foreground)] flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-[#0A7469]" />
+                  <span>Calculando plazos de conformidad en Neon DB...</span>
+                </div>
+              ) : alerts.length === 0 ? (
+                <div className="p-12 text-center text-xs text-[var(--muted-foreground)]">
+                  <CheckCircle2 className="w-8 h-8 text-[#0A7469] mx-auto mb-2 opacity-50" />
+                  <p className="font-semibold text-[var(--foreground)]">No hay comprobantes pendientes de conformidad</p>
+                  <p className="text-xs mt-1">Todas las facturas al crédito han sido procesadas o están pagadas.</p>
+                </div>
+              ) : (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--border)] bg-[var(--muted)]/50 text-[var(--muted-foreground)] uppercase font-medium">
+                      <th className="py-3 px-6">Comprobante</th>
+                      <th className="py-3 px-6">Proveedor</th>
+                      <th className="py-3 px-6">Fecha Emisión</th>
+                      <th className="py-3 px-6">Límite Conformidad (8d)</th>
+                      <th className="py-3 px-6 text-center">Tiempo Restante</th>
+                      <th className="py-3 px-6 text-right">Monto Total</th>
+                      <th className="py-3 px-6 text-center">Estado del Flujo</th>
+                      <th className="py-3 px-6">Acción Recomendada</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border)]">
+                    {alerts.map((alert) => (
+                      <tr
+                        key={alert.invoice_id}
+                        className={`transition-colors ${
+                          alert.is_urgent ? 'bg-rose-50/40 hover:bg-rose-50/70' : 'hover:bg-[var(--muted)]/40'
+                        }`}
+                      >
+                        <td className="py-4 px-6 font-mono font-medium">
+                          {alert.series}-{alert.number}
+                        </td>
+                        <td className="py-4 px-6">
+                          <span className="font-medium">{alert.supplier_name}</span>
+                          <span className="block text-[11px] text-[var(--muted-foreground)] font-mono">
+                            RUC: {alert.supplier_ruc}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6 text-[var(--muted-foreground)]">
+                          {formatDate(alert.issue_date)}
+                        </td>
+                        <td className="py-4 px-6 font-mono text-[11px]">
+                          {alert.conformity_deadline ? formatDate(alert.conformity_deadline) : '—'}
+                        </td>
+                        <td className="py-4 px-6 text-center">
+                          {alert.hours_remaining <= 0 ? (
+                            <span className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-gray-200 text-gray-700">
+                              PLAZO EXPIRADO
+                            </span>
+                          ) : alert.is_urgent ? (
+                            <span className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-600 text-white animate-pulse inline-flex items-center gap-1 shadow-xs">
+                              <Clock className="w-3 h-3" />
+                              {alert.hours_remaining.toFixed(1)} h RESTANTES
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-[#E7F5EC] text-[#176B3F] inline-flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-[#176B3F]" />
+                              {alert.hours_remaining.toFixed(1)} h restantes
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-4 px-6 text-right font-mono font-semibold">
+                          {formatCurrency(alert.total_amount, alert.currency)}
+                        </td>
+                        <td className="py-4 px-6 text-center">
+                          <StatusChip state={alert.state} />
+                        </td>
+                        <td className="py-4 px-6 text-xs text-[var(--muted-foreground)]">
+                          {alert.action_required_note ||
+                            (alert.is_urgent
+                              ? 'Validar discrepancias 3-Way inmediatamente o emitir observación en SUNAT.'
+                              : 'Revisión en curso.')}
                         </td>
                       </tr>
                     ))}

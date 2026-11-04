@@ -139,6 +139,49 @@ export interface ERPInvoiceConfirmation {
   message: string;
 }
 
+export interface NegotiableAlert {
+  invoice_id: string;
+  series: string;
+  number: string;
+  supplier_ruc: string;
+  supplier_name: string;
+  issue_date: string;
+  due_date?: string;
+  currency: string;
+  total_amount: number;
+  state: InvoiceInternalState;
+  conformity_deadline: string;
+  hours_remaining: number;
+  is_urgent: boolean;
+  action_required_note?: string;
+}
+
+export type SIREComparisonStatus =
+  | 'match'
+  | 'missing_in_portal'
+  | 'missing_in_sire'
+  | 'amount_mismatch';
+
+export interface SIREDiscrepancyItem {
+  document_ref: string;
+  supplier_ruc: string;
+  status: SIREComparisonStatus;
+  portal_total?: number;
+  sire_total?: number;
+  message: string;
+}
+
+export interface SIREComparisonResult {
+  period: string;
+  total_portal_invoices: number;
+  total_sire_proposals: number;
+  matched_count: number;
+  missing_in_portal_count: number;
+  missing_in_sire_count: number;
+  items: SIREDiscrepancyItem[];
+  compared_at: string;
+}
+
 export class FactumfluxClient {
   private baseUrl: string;
   private tenantId?: string;
@@ -273,6 +316,17 @@ export class FactumfluxClient {
     return this.fetch(`/api/v1/backoffice/invoices/${invoiceId}/post-to-sap`, {
       method: 'POST',
     });
+  }
+
+  // Factura Negociable 8-day deadline alerts
+  async listNegotiableAlerts(): Promise<NegotiableAlert[]> {
+    return this.fetch('/api/v1/backoffice/invoices/negotiable-alerts');
+  }
+
+  // SUNAT SIRE reconciliation cross-check
+  async compareSIRE(period?: string): Promise<SIREComparisonResult> {
+    const query = period ? `?period=${encodeURIComponent(period)}` : '';
+    return this.fetch(`/api/v1/backoffice/sire/compare${query}`);
   }
 }
 
