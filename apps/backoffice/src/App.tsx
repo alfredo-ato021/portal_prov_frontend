@@ -58,7 +58,7 @@ type ActiveView =
   | 'superadmin_plans';
 
 const client = new FactumfluxClient({
-  baseUrl: 'http://localhost:8080',
+  baseUrl: (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8080',
   tenantId: 'a1111111-1111-1111-1111-111111111111', // Tenant La Bodega de la Trattoria
 });
 

@@ -16,7 +16,8 @@ RUN pnpm install --frozen-lockfile
 
 # Build argument selects which app to bundle (backoffice, portal-proveedor, landing)
 ARG APP_NAME=backoffice
-ENV VITE_API_BASE_URL=""
+ARG VITE_API_BASE_URL=https://factumflux-backend-pxeov3gtya-tl.a.run.app
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 
 # Compile all packages and target app
 RUN pnpm --filter @factumflux/api-client build || true
@@ -41,3 +42,4 @@ ENV PORT=8080
 EXPOSE 8080
 
 CMD ["nginx", "-g", "daemon off;"]
+

@@ -8,9 +8,9 @@ steps:
   # ── APP 1: BACKOFFICE & SUPERADMIN ───────────────────────────────────────
   - name: gcr.io/kaniko-project/executor:latest
     args:
-      - --destination=southamerica-west1-docker.pkg.dev/$PROJECT_ID/factumflux/backoffice:$SHORT_SHA
       - --destination=southamerica-west1-docker.pkg.dev/$PROJECT_ID/factumflux/backoffice:latest
       - --build-arg=APP_NAME=backoffice
+      - --build-arg=VITE_API_BASE_URL=https://factumflux-backend-pxeov3gtya-tl.a.run.app
       - --cache=true
       - --cache-repo=southamerica-west1-docker.pkg.dev/$PROJECT_ID/factumflux/cache
       - --cache-ttl=168h
@@ -21,7 +21,7 @@ steps:
       - run
       - deploy
       - factumflux-backoffice
-      - --image=southamerica-west1-docker.pkg.dev/$PROJECT_ID/factumflux/backoffice:$SHORT_SHA
+      - --image=southamerica-west1-docker.pkg.dev/$PROJECT_ID/factumflux/backoffice:latest
       - --region=southamerica-west1
       - --platform=managed
       - --allow-unauthenticated
@@ -33,9 +33,9 @@ steps:
   # ── APP 2: PORTAL PROVEEDOR ──────────────────────────────────────────────
   - name: gcr.io/kaniko-project/executor:latest
     args:
-      - --destination=southamerica-west1-docker.pkg.dev/$PROJECT_ID/factumflux/portal-proveedor:$SHORT_SHA
       - --destination=southamerica-west1-docker.pkg.dev/$PROJECT_ID/factumflux/portal-proveedor:latest
       - --build-arg=APP_NAME=portal-proveedor
+      - --build-arg=VITE_API_BASE_URL=https://factumflux-backend-pxeov3gtya-tl.a.run.app
       - --cache=true
       - --cache-repo=southamerica-west1-docker.pkg.dev/$PROJECT_ID/factumflux/cache
       - --cache-ttl=168h
@@ -46,7 +46,7 @@ steps:
       - run
       - deploy
       - factumflux-portal-proveedor
-      - --image=southamerica-west1-docker.pkg.dev/$PROJECT_ID/factumflux/portal-proveedor:$SHORT_SHA
+      - --image=southamerica-west1-docker.pkg.dev/$PROJECT_ID/factumflux/portal-proveedor:latest
       - --region=southamerica-west1
       - --platform=managed
       - --allow-unauthenticated
@@ -58,9 +58,9 @@ steps:
   # ── APP 3: LANDING CORPORATIVA ────────────────────────────────────────────
   - name: gcr.io/kaniko-project/executor:latest
     args:
-      - --destination=southamerica-west1-docker.pkg.dev/$PROJECT_ID/factumflux/landing:$SHORT_SHA
       - --destination=southamerica-west1-docker.pkg.dev/$PROJECT_ID/factumflux/landing:latest
       - --build-arg=APP_NAME=landing
+      - --build-arg=VITE_API_BASE_URL=https://factumflux-backend-pxeov3gtya-tl.a.run.app
       - --cache=true
       - --cache-repo=southamerica-west1-docker.pkg.dev/$PROJECT_ID/factumflux/cache
       - --cache-ttl=168h
@@ -71,7 +71,7 @@ steps:
       - run
       - deploy
       - factumflux-landing
-      - --image=southamerica-west1-docker.pkg.dev/$PROJECT_ID/factumflux/landing:$SHORT_SHA
+      - --image=southamerica-west1-docker.pkg.dev/$PROJECT_ID/factumflux/landing:latest
       - --region=southamerica-west1
       - --platform=managed
       - --allow-unauthenticated
@@ -79,9 +79,6 @@ steps:
       - --max-instances=5
       - --cpu=1
       - --memory=256Mi
-
-substitutions:
-  _REGION: southamerica-west1
 
 options:
   logging: CLOUD_LOGGING_ONLY
