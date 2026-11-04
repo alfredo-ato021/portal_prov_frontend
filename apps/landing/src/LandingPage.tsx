@@ -13,12 +13,27 @@ import {
   Menu,
   X,
   ExternalLink,
+  MessageSquare,
+  Coins,
+  Award,
+  Layers,
+  CheckCheck,
+  RefreshCw,
 } from 'lucide-react';
 import { StatusChip } from '@factumflux/ui';
 
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Dynamic URLs: resolve to production Cloud Run URLs unless developing on localhost
+  const isLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+  const portalUrl =
+    (import.meta as any).env?.VITE_PORTAL_URL ||
+    (isLocal ? 'http://localhost:3000' : 'https://factumflux-portal-proveedor-pxeov3gtya-tl.a.run.app');
+  const backofficeUrl =
+    (import.meta as any).env?.VITE_BACKOFFICE_URL ||
+    (isLocal ? 'http://localhost:3001' : 'https://factumflux-backoffice-pxeov3gtya-tl.a.run.app');
 
   useEffect(() => {
     const handleScroll = () => {
@@ -39,14 +54,14 @@ export default function LandingPage() {
         }`}
       >
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <a href="#" className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[#0B2545] flex items-center justify-center text-white font-bold text-lg shadow-md">
               F
             </div>
             <span className="font-bold text-2xl tracking-tight text-[#0B2545]">
               Factum<span className="text-[#0A7469]">flux</span>
             </span>
-          </div>
+          </a>
 
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-[#5B6B7F]">
             <a href="#solucion" className="hover:text-[#0A7469] transition-colors">
@@ -68,7 +83,7 @@ export default function LandingPage() {
 
           <div className="hidden md:flex items-center gap-3">
             <a
-              href="http://localhost:3000"
+              href={portalUrl}
               target="_blank"
               rel="noreferrer"
               className="text-sm font-semibold text-[#0B2545] hover:text-[#0A7469] px-4 py-2 transition-colors flex items-center gap-1.5"
@@ -76,7 +91,7 @@ export default function LandingPage() {
               Portal Proveedores <ExternalLink className="w-3.5 h-3.5" />
             </a>
             <a
-              href="http://localhost:3001"
+              href={backofficeUrl}
               target="_blank"
               rel="noreferrer"
               className="px-5 py-2.5 bg-[#0A7469] hover:bg-[#075A52] text-white text-sm font-medium rounded-lg shadow-sm transition-all flex items-center gap-2"
@@ -95,16 +110,57 @@ export default function LandingPage() {
         </div>
 
         {mobileMenuOpen && (
-          <div className="md:hidden bg-white border-b border-[#E2E7EE] px-6 py-4 space-y-3">
-            <a href="#solucion" className="block text-sm font-medium py-2">Solución</a>
-            <a href="#proveedores" className="block text-sm font-medium py-2">Efecto Red</a>
-            <a href="#matching" className="block text-sm font-medium py-2">3-Way Match</a>
-            <a href="#planes" className="block text-sm font-medium py-2">Planes</a>
+          <div className="md:hidden bg-white border-b border-[#E2E7EE] px-6 py-4 space-y-3 shadow-lg">
+            <a
+              href="#solucion"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block text-sm font-medium py-2 hover:text-[#0A7469]"
+            >
+              Solución
+            </a>
+            <a
+              href="#proveedores"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block text-sm font-medium py-2 hover:text-[#0A7469]"
+            >
+              Efecto Red
+            </a>
+            <a
+              href="#matching"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block text-sm font-medium py-2 hover:text-[#0A7469]"
+            >
+              3-Way Match
+            </a>
+            <a
+              href="#planes"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block text-sm font-medium py-2 hover:text-[#0A7469]"
+            >
+              Planes
+            </a>
+            <a
+              href="#seguridad"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block text-sm font-medium py-2 hover:text-[#0A7469]"
+            >
+              Seguridad
+            </a>
             <div className="pt-4 border-t border-[#E2E7EE] flex flex-col gap-2">
-              <a href="http://localhost:3000" className="w-full text-center py-2 text-sm font-semibold border border-[#E2E7EE] rounded-lg">
+              <a
+                href={portalUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full text-center py-2 text-sm font-semibold border border-[#E2E7EE] rounded-lg text-[#0B2545]"
+              >
                 Portal Proveedores
               </a>
-              <a href="http://localhost:3001" className="w-full text-center py-2.5 text-sm font-medium bg-[#0A7469] text-white rounded-lg">
+              <a
+                href={backofficeUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full text-center py-2.5 text-sm font-medium bg-[#0A7469] text-white rounded-lg"
+              >
                 BackOffice Cliente
               </a>
             </div>
@@ -194,7 +250,7 @@ export default function LandingPage() {
               <span className="flex items-center gap-2">
                 <Clock className="w-4 h-4" /> Alerta de Factura Negociable: 6 días restantes antes de conformidad presunta.
               </span>
-              <span className="font-bold underline cursor-pointer">Ver detalle</span>
+              <a href="#matching" className="font-bold underline cursor-pointer hover:text-[#075A52]">Ver detalle</a>
             </div>
           </div>
         </div>
@@ -241,6 +297,134 @@ export default function LandingPage() {
               <p className="text-sm text-[#5B6B7F] leading-relaxed">
                 Integración nativa con SAP S/4HANA vía OData, o despliegue del agente propio en Go en servidores on-premise mediante túnel seguro mTLS/gRPC.
               </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── SECCIÓN: EFECTO RED DE PROVEEDORES ───────────────────────────── */}
+      <section id="proveedores" className="py-20 bg-[#F3F5F8] border-t border-[#E2E7EE]">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center max-w-3xl mx-auto mb-16">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#E8F4F2] border border-[#CBE9E5] text-[#0A7469] text-xs font-semibold mb-4">
+              <Building2 className="w-3.5 h-3.5" />
+              <span>Ecosistema de Autoservicio y Liquidez</span>
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-[#0B2545] mb-4">
+              Efecto Red: Tus proveedores conectados, sin llamadas ni reclamos
+            </h2>
+            <p className="text-[#5B6B7F] text-base leading-relaxed">
+              Un proveedor registrado en Factumflux gestiona sus cobranzas con todos sus clientes corporativos desde un único perfil centralizado, con visibilidad completa de fechas de pago.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-white p-6 rounded-2xl border border-[#E2E7EE] shadow-sm hover:border-[#0A7469]/50 hover:shadow-md transition-all">
+              <div className="w-10 h-10 rounded-lg bg-[#E8F4F2] text-[#0A7469] flex items-center justify-center mb-4">
+                <Building2 className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-[#0B2545] text-lg mb-2">Identidad Única Global</h3>
+              <p className="text-xs text-[#5B6B7F] leading-relaxed">
+                Registro único por RUC. El proveedor interactúa con La Bodega de la Trattoria, Carnes Mambrino y cualquier cliente de la red sin duplicar accesos.
+              </p>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl border border-[#E2E7EE] shadow-sm hover:border-[#0A7469]/50 hover:shadow-md transition-all">
+              <div className="w-10 h-10 rounded-lg bg-[#E8F4F2] text-[#0A7469] flex items-center justify-center mb-4">
+                <MessageSquare className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-[#0B2545] text-lg mb-2">Asistente WhatsApp</h3>
+              <p className="text-xs text-[#5B6B7F] leading-relaxed">
+                Autenticación segura vía OTP de 10 minutos. Consultas automáticas de estado de pago, facturas observadas y programación en segundos.
+              </p>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl border border-[#E2E7EE] shadow-sm hover:border-[#0A7469]/50 hover:shadow-md transition-all">
+              <div className="w-10 h-10 rounded-lg bg-[#E8F4F2] text-[#0A7469] flex items-center justify-center mb-4">
+                <Coins className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-[#0B2545] text-lg mb-2">Factoring & CAVALI</h3>
+              <p className="text-xs text-[#5B6B7F] leading-relaxed">
+                Simulador de cotización financiera en tiempo real. Registro de anotación en cuenta ICLV con mérito ejecutivo para anticipar liquidez.
+              </p>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl border border-[#E2E7EE] shadow-sm hover:border-[#0A7469]/50 hover:shadow-md transition-all">
+              <div className="w-10 h-10 rounded-lg bg-[#E8F4F2] text-[#0A7469] flex items-center justify-center mb-4">
+                <Award className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-[#0B2545] text-lg mb-2">Scoring de Confiabilidad</h3>
+              <p className="text-xs text-[#5B6B7F] leading-relaxed">
+                Puntuación algorítmica y asignación de Tiers (A+, A, B, C, D) basada en tasa de auto-match, puntualidad y condición tributaria SUNAT.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── SECCIÓN: MOTOR 3-WAY MATCH ──────────────────────────────────── */}
+      <section id="matching" className="py-20 bg-white border-t border-[#E2E7EE]">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center max-w-3xl mx-auto mb-16">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#E8F4F2] border border-[#CBE9E5] text-[#0A7469] text-xs font-semibold mb-4">
+              <Layers className="w-3.5 h-3.5" />
+              <span>Conciliación Automática de Cuentas por Pagar</span>
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-[#0B2545] mb-4">
+              Motor 3-Way & 4-Way Match Inteligente
+            </h2>
+            <p className="text-[#5B6B7F] text-base leading-relaxed">
+              Compara comprobantes electrónicos UBL 2.1 contra las órdenes de compra de tu ERP, guías de recepción de almacén y hojas de entrada de servicios con tolerancias configurables.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="p-8 rounded-2xl border border-[#E2E7EE] bg-[#F3F5F8]/50 flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-lg bg-[#0B2545] text-white flex items-center justify-center font-bold text-sm mb-4">
+                  1
+                </div>
+                <h3 className="font-bold text-[#0B2545] text-xl mb-3">Ingesta y Validación Fiscal</h3>
+                <p className="text-sm text-[#5B6B7F] leading-relaxed mb-4">
+                  Extracción de campos UBL 2.1 (ítems, cantidades, IGV, detracción). Validación en tiempo real con SUNAT para comprobar condición de RUC Activo/Habido y firma XMLDSig.
+                </p>
+              </div>
+              <div className="text-xs text-[#176B3F] font-semibold flex items-center gap-1.5 pt-4 border-t border-[#E2E7EE]">
+                <CheckCheck className="w-4 h-4" /> Filtro preventivo contra fraude fiscal
+              </div>
+            </div>
+
+            <div className="p-8 rounded-2xl border-2 border-[#0A7469] bg-white shadow-md flex flex-col justify-between relative">
+              <div className="absolute -top-3 left-6 bg-[#0A7469] text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">
+                Núcleo Automatizado
+              </div>
+              <div>
+                <div className="w-10 h-10 rounded-lg bg-[#E8F4F2] text-[#0A7469] flex items-center justify-center font-bold text-sm mb-4">
+                  2
+                </div>
+                <h3 className="font-bold text-[#0B2545] text-xl mb-3">Cruce de 3 y 4 Vías</h3>
+                <p className="text-sm text-[#5B6B7F] leading-relaxed mb-4">
+                  Cotejo ítem por ítem: Factura vs Orden de Compra vs Guía de Recepción (GR / MIGO) y Hoja de Entrada de Servicios (HES). Aplicación estricta de tolerancias de monto.
+                </p>
+              </div>
+              <div className="text-xs text-[#0A7469] font-semibold flex items-center gap-1.5 pt-4 border-t border-[#E2E7EE]">
+                <RefreshCw className="w-4 h-4" /> 100% conciliación desatendida
+              </div>
+            </div>
+
+            <div className="p-8 rounded-2xl border border-[#E2E7EE] bg-[#F3F5F8]/50 flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-lg bg-[#0B2545] text-white flex items-center justify-center font-bold text-sm mb-4">
+                  3
+                </div>
+                <h3 className="font-bold text-[#0B2545] text-xl mb-3">SIRE y Posteo a ERP</h3>
+                <p className="text-sm text-[#5B6B7F] leading-relaxed mb-4">
+                  Conciliación mensual contra la propuesta SIRE RVIE/RCE de SUNAT, monitoreo del plazo perentorio de 8 días de Factura Negociable y publicación del asiento en SAP S/4HANA.
+                </p>
+              </div>
+              <div className="text-xs text-[#176B3F] font-semibold flex items-center gap-1.5 pt-4 border-t border-[#E2E7EE]">
+                <CheckCircle2 className="w-4 h-4" /> Integración ERP OData certificada
+              </div>
             </div>
           </div>
         </div>
