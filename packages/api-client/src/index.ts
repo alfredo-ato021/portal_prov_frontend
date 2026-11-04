@@ -13,8 +13,10 @@ export type InvoiceInternalState =
 
 export interface PlatformStats {
   active_tenants: number;
+  trial_tenants: number;
+  suspended_tenants: number;
   total_suppliers: number;
-  monthly_invoices: number;
+  total_monthly_invoices: number;
   auto_match_ratio: number;
 }
 
@@ -23,10 +25,51 @@ export interface TenantSummary {
   name: string;
   slug: string;
   ruc: string;
-  status: 'active' | 'suspended';
+  status: 'active' | 'suspended' | 'trial';
   plan_code: string;
+  plan_name?: string;
   kms_key_id?: string;
   storage_bucket?: string;
+  monthly_invoices_used?: number;
+  max_monthly_invoices?: number;
+  active_suppliers_count?: number;
+  max_suppliers?: number;
+  created_at?: string;
+}
+
+export interface TenantPolicy {
+  tenant_id: string;
+  price_tolerance_pct: number;
+  price_tolerance_abs: number;
+  quantity_tolerance_pct: number;
+  max_issue_days: number;
+  require_hes_for_services: boolean;
+  require_migo_for_goods: boolean;
+  reject_non_habido: boolean;
+  custom_cel_expression: string;
+  updated_at?: string;
+}
+
+export interface CommercialPlan {
+  code: string;
+  name: string;
+  max_suppliers: number;
+  max_monthly_invoices: number;
+  price_pen: number;
+  currency: string;
+  is_active: boolean;
+}
+
+export interface JITSupportSession {
+  id: string;
+  target_tenant_id: string;
+  tenant_name: string;
+  requester_email: string;
+  reason: string;
+  duration_hours: number;
+  status: 'active' | 'expired' | 'revoked';
+  expires_at: string;
+  created_at: string;
 }
 
 export interface CreateTenantRequest {
@@ -232,13 +275,39 @@ export class FactumfluxClient {
     return this.fetch('/healthz');
   }
 
-  // SuperAdmin
+  // SuperAdmin Platform Operations
+  async getPlatformStats(): Promise<PlatformStats> {
+    return this.fetch('/api/admin/stats');
+  }
+
   async listTenants(): Promise<TenantSummary[]> {
     return this.fetch('/api/admin/tenants');
   }
 
   async createTenant(data: CreateTenantRequest): Promise<TenantSummary> {
     return this.fetch('/api/admin/tenants', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateTenantStatus(tenantId: string, status: string): Promise<{ status: string }> {
+    return this.fetch(`/api/admin/tenants/${tenantId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+  }
+
+  async listCommercialPlans(): Promise<CommercialPlan[]> {
+    return this.fetch('/api/admin/plans');
+  }
+
+  async listJITSessions(): Promise<JITSupportSession[]> {
+    return this.fetch('/api/admin/jit-sessions');
+  }
+
+  async createJITSession(data: { target_tenant_id: string; requester_email: string; reason: string; duration_hours: number }): Promise<JITSupportSession> {
+    return this.fetch('/api/admin/jit-sessions', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -327,6 +396,18 @@ export class FactumfluxClient {
   async compareSIRE(period?: string): Promise<SIREComparisonResult> {
     const query = period ? `?period=${encodeURIComponent(period)}` : '';
     return this.fetch(`/api/v1/backoffice/sire/compare${query}`);
+  }
+
+  // Tenant Matching Policies & Dynamic CEL Rules
+  async getTenantPolicy(): Promise<TenantPolicy> {
+    return this.fetch('/api/v1/backoffice/policies');
+  }
+
+  async updateTenantPolicy(policy: Partial<TenantPolicy>): Promise<TenantPolicy> {
+    return this.fetch('/api/v1/backoffice/policies', {
+      method: 'PUT',
+      body: JSON.stringify(policy),
+    });
   }
 }
 

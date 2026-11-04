@@ -20,6 +20,8 @@ import {
   Clock,
   AlertTriangle,
   Calendar,
+  Sliders,
+  FileCode,
 } from 'lucide-react';
 import { StatusChip } from '@factumflux/ui';
 import {
@@ -29,6 +31,11 @@ import {
   PurchaseOrder,
   NegotiableAlert,
   SIREComparisonResult,
+  PlatformStats,
+  TenantPolicy,
+  CommercialPlan,
+  JITSupportSession,
+  AuditEvent,
 } from '@factumflux/api-client';
 import { t, formatCurrency, formatDate } from '@factumflux/i18n';
 
@@ -37,6 +44,7 @@ type ActiveView =
   | 'tenant_orders'
   | 'tenant_sire'
   | 'tenant_alerts'
+  | 'tenant_policies'
   | 'superadmin_tenants'
   | 'superadmin_jit'
   | 'superadmin_audit'
@@ -69,11 +77,29 @@ export default function App() {
   const [sirePeriod, setSirePeriod] = useState('2026-11');
   const [isComparingSire, setIsComparingSire] = useState(false);
 
+  // Matching Policies state
+  const [policy, setPolicy] = useState<TenantPolicy | null>(null);
+  const [isSavingPolicy, setIsSavingPolicy] = useState(false);
+
+  // SuperAdmin states
+  const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
+  const [plans, setPlans] = useState<CommercialPlan[]>([]);
+  const [jitSessions, setJitSessions] = useState<JITSupportSession[]>([]);
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+
+  // JIT modal state
+  const [isRequestingJIT, setIsRequestingJIT] = useState(false);
+  const [jitTargetTenantId, setJitTargetTenantId] = useState('');
+  const [jitEmail, setJitEmail] = useState('superadmin@factumflux.com');
+  const [jitReason, setJitReason] = useState('');
+  const [jitDurationHours, setJitDurationHours] = useState(2);
+
   // New tenant modal state
   const [isCreatingTenant, setIsCreatingTenant] = useState(false);
   const [newTenantName, setNewTenantName] = useState('');
   const [newTenantSlug, setNewTenantSlug] = useState('');
   const [newTenantRUC, setNewTenantRUC] = useState('');
+  const [newTenantPlan, setNewTenantPlan] = useState('growth');
 
   const loadData = async () => {
     setLoading(true);
@@ -97,9 +123,34 @@ export default function App() {
       } else if (activeView === 'tenant_alerts') {
         const data = await client.listNegotiableAlerts();
         setAlerts(data);
+      } else if (activeView === 'tenant_policies') {
+        const data = await client.getTenantPolicy();
+        setPolicy(data);
       } else if (activeView === 'superadmin_tenants') {
-        const data = await client.listTenants();
-        setTenants(data);
+        const [statsData, tenantsData, plansData] = await Promise.all([
+          client.getPlatformStats().catch(() => null),
+          client.listTenants(),
+          client.listCommercialPlans().catch(() => []),
+        ]);
+        setPlatformStats(statsData);
+        setTenants(tenantsData);
+        setPlans(plansData);
+      } else if (activeView === 'superadmin_jit') {
+        const [jitData, tenantsData] = await Promise.all([
+          client.listJITSessions(),
+          client.listTenants(),
+        ]);
+        setJitSessions(jitData);
+        setTenants(tenantsData);
+        if (tenantsData.length > 0 && !jitTargetTenantId) {
+          setJitTargetTenantId(tenantsData[0].id);
+        }
+      } else if (activeView === 'superadmin_plans') {
+        const plansData = await client.listCommercialPlans();
+        setPlans(plansData);
+      } else if (activeView === 'superadmin_audit') {
+        const auditData = await client.listAuditEvents(50);
+        setAuditEvents(auditData);
       }
     } catch (err: any) {
       setError(err?.message || 'Error conectando con la API.');
@@ -120,6 +171,55 @@ export default function App() {
       setError(err?.message || 'Error al conciliar con SIRE SUNAT.');
     } finally {
       setIsComparingSire(false);
+    }
+  };
+
+  const handleSavePolicy = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!policy) return;
+    setIsSavingPolicy(true);
+    setError(null);
+    try {
+      const updated = await client.updateTenantPolicy(policy);
+      setPolicy(updated);
+      setActionMessage('Políticas de cuadre y tolerancias CEL actualizadas exitosamente en Neon DB.');
+    } catch (err: any) {
+      setError(err?.message || 'Error guardando políticas.');
+    } finally {
+      setIsSavingPolicy(false);
+    }
+  };
+
+  const handleToggleTenantStatus = async (tenantId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
+    try {
+      await client.updateTenantStatus(tenantId, newStatus);
+      setActionMessage(`Estado del tenant actualizado a ${newStatus}.`);
+      loadData();
+    } catch (err: any) {
+      setError(err?.message || 'Error actualizando estado del tenant.');
+    }
+  };
+
+  const handleCreateJITSession = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!jitTargetTenantId || !jitReason.trim()) {
+      setError('Debes especificar el tenant destino y el motivo auditado de la sesión.');
+      return;
+    }
+    try {
+      await client.createJITSession({
+        target_tenant_id: jitTargetTenantId,
+        requester_email: jitEmail,
+        reason: jitReason,
+        duration_hours: Number(jitDurationHours),
+      });
+      setIsRequestingJIT(false);
+      setJitReason('');
+      setActionMessage('Sesión de soporte JIT aprobada y registrada en el libro inmutable de auditoría.');
+      loadData();
+    } catch (err: any) {
+      setError(err?.message || 'Error solicitando sesión JIT.');
     }
   };
 
@@ -303,6 +403,17 @@ export default function App() {
                     {alerts.filter((a) => a.is_urgent).length}
                   </span>
                 )}
+              </button>
+              <button
+                onClick={() => setActiveView('tenant_policies')}
+                className={`px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${
+                  activeView === 'tenant_policies'
+                    ? 'bg-white shadow-xs text-[#0B2545] font-semibold'
+                    : 'text-[var(--muted-foreground)] hover:text-[#0B2545]'
+                }`}
+              >
+                <Sliders className="w-3.5 h-3.5 text-[#0A7469]" />
+                Políticas de Cuadre (CEL)
               </button>
               <button
                 onClick={() => setActiveView('superadmin_tenants')}
@@ -980,6 +1091,190 @@ export default function App() {
           </div>
         )}
 
+        {/* VIEW 1.5: MATCHING POLICIES & CEL RULES */}
+        {activeView === 'tenant_policies' && (
+          <div>
+            <div className="mb-6">
+              <h1 className="text-2xl font-bold text-[#0B2545] flex items-center gap-2">
+                <Sliders className="w-6 h-6 text-[#0A7469]" />
+                Políticas de Cuadre y Motor de Tolerancias CEL
+              </h1>
+              <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                Configure las tolerancias dinámicas de precio, cantidad y validaciones documentarias que rigen el motor 3-Way Match en Neon DB.
+              </p>
+            </div>
+
+            {/* Action or Error Message */}
+            {actionMessage && (
+              <div className="mb-6 p-4 rounded-lg bg-[#E8F4F2] border border-[#CBE9E5] text-[#0A7469] text-xs flex items-center justify-between">
+                <span className="font-medium">{actionMessage}</span>
+                <button onClick={() => setActionMessage(null)} className="underline font-semibold ml-4">Cerrar</button>
+              </div>
+            )}
+
+            {loading ? (
+              <div className="p-12 text-center text-sm text-[var(--muted-foreground)] flex items-center justify-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin text-[#0A7469]" />
+                <span>Cargando políticas activas del tenant...</span>
+              </div>
+            ) : policy ? (
+              <form onSubmit={handleSavePolicy} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Card 1: Tolerancias Económicas */}
+                  <div className="bg-white border border-[var(--border)] rounded-xl p-6 shadow-xs space-y-4">
+                    <h3 className="font-bold text-sm text-[#0B2545] flex items-center gap-2 pb-2 border-b border-[var(--border)]">
+                      <TrendingUp className="w-4 h-4 text-[#0A7469]" />
+                      Tolerancias de Precio y Monto
+                    </h3>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-[#0B2545] mb-1">
+                        Tolerancia Porcentual de Precio (%):
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="10"
+                        value={policy.price_tolerance_pct}
+                        onChange={(e) => setPolicy({ ...policy, price_tolerance_pct: parseFloat(e.target.value) || 0 })}
+                        className="w-full border border-[var(--border)] rounded px-3 py-2 text-xs font-mono focus:outline-none focus:border-[#0A7469]"
+                      />
+                      <span className="text-[11px] text-[var(--muted-foreground)] mt-1 block">
+                        Diferencia máxima admitida como porcentaje del subtotal de la Orden de Compra (ej: 0.20% o 0.50%).
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-[#0B2545] mb-1">
+                        Tolerancia Absoluta Máxima (PEN / USD):
+                      </label>
+                      <input
+                        type="number"
+                        step="0.05"
+                        min="0"
+                        max="100"
+                        value={policy.price_tolerance_abs}
+                        onChange={(e) => setPolicy({ ...policy, price_tolerance_abs: parseFloat(e.target.value) || 0 })}
+                        className="w-full border border-[var(--border)] rounded px-3 py-2 text-xs font-mono focus:outline-none focus:border-[#0A7469]"
+                      />
+                      <span className="text-[11px] text-[var(--muted-foreground)] mt-1 block">
+                        Tope monetario admitido por redondeo o centavos (ej: S/ 0.50 o S/ 1.00).
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-[#0B2545] mb-1">
+                        Tolerancia de Cantidad (%):
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="10"
+                        value={policy.quantity_tolerance_pct}
+                        onChange={(e) => setPolicy({ ...policy, quantity_tolerance_pct: parseFloat(e.target.value) || 0 })}
+                        className="w-full border border-[var(--border)] rounded px-3 py-2 text-xs font-mono focus:outline-none focus:border-[#0A7469]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Card 2: Reglas Operativas y Fiscales */}
+                  <div className="bg-white border border-[var(--border)] rounded-xl p-6 shadow-xs space-y-4">
+                    <h3 className="font-bold text-sm text-[#0B2545] flex items-center gap-2 pb-2 border-b border-[var(--border)]">
+                      <FileCheck className="w-4 h-4 text-[#0A7469]" />
+                      Requisitos de Recepción y Ventana Temporal
+                    </h3>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-[#0B2545] mb-1">
+                        Ventana Máxima de Emisión tras la OC (días):
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="365"
+                        value={policy.max_issue_days}
+                        onChange={(e) => setPolicy({ ...policy, max_issue_days: parseInt(e.target.value) || 30 })}
+                        className="w-full border border-[var(--border)] rounded px-3 py-2 text-xs font-mono focus:outline-none focus:border-[#0A7469]"
+                      />
+                      <span className="text-[11px] text-[var(--muted-foreground)] mt-1 block">
+                        Facturas emitidas con más días de diferencia respecto a la OC serán observadas automáticamente.
+                      </span>
+                    </div>
+
+                    <div className="space-y-3 pt-2">
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-medium">
+                        <input
+                          type="checkbox"
+                          checked={policy.require_hes_for_services}
+                          onChange={(e) => setPolicy({ ...policy, require_hes_for_services: e.target.checked })}
+                          className="rounded border-[var(--border)] text-[#0A7469] focus:ring-[#0A7469]"
+                        />
+                        <span>Exigir Hoja de Entrada / Confirmación de Servicio (HES) para servicios</span>
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-medium">
+                        <input
+                          type="checkbox"
+                          checked={policy.require_migo_for_goods}
+                          onChange={(e) => setPolicy({ ...policy, require_migo_for_goods: e.target.checked })}
+                          className="rounded border-[var(--border)] text-[#0A7469] focus:ring-[#0A7469]"
+                        />
+                        <span>Exigir Guía de Recepción de Almacén (MIGO) para mercaderías físicas</span>
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-medium">
+                        <input
+                          type="checkbox"
+                          checked={policy.reject_non_habido}
+                          onChange={(e) => setPolicy({ ...policy, reject_non_habido: e.target.checked })}
+                          className="rounded border-[var(--border)] text-[#0A7469] focus:ring-[#0A7469]"
+                        />
+                        <span>Rechazar automáticamente comprobantes de proveedores NO HABIDOS o NO ACTIVOS</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 3: Regla Dinámica CEL */}
+                <div className="bg-white border border-[var(--border)] rounded-xl p-6 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+                    <h3 className="font-bold text-sm text-[#0B2545] flex items-center gap-2">
+                      <FileCode className="w-4 h-4 text-[#0A7469]" />
+                      Expresión de Regla CEL Personalizada (Common Expression Language)
+                    </h3>
+                    <span className="text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono font-semibold">
+                      Evaluación In-Memory Go
+                    </span>
+                  </div>
+                  <p className="text-xs text-[var(--muted-foreground)]">
+                    Defina reglas booleanas avanzadas evaluadas por el motor antes de autorizar el registro en SAP (ej: <code>invoice_total &lt; 50000 &amp;&amp; supplier_condition == 'HABIDO'</code>):
+                  </p>
+                  <textarea
+                    rows={2}
+                    value={policy.custom_cel_expression}
+                    onChange={(e) => setPolicy({ ...policy, custom_cel_expression: e.target.value })}
+                    className="w-full font-mono text-xs border border-[var(--border)] rounded-lg p-3 bg-slate-50 focus:bg-white focus:outline-none focus:border-[#0A7469]"
+                    placeholder="invoice_total < 50000 && supplier_condition == 'HABIDO'"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="submit"
+                    disabled={isSavingPolicy}
+                    className="px-6 py-2.5 bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-bold rounded-lg shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <Sliders className={`w-4 h-4 ${isSavingPolicy ? 'animate-spin' : ''}`} />
+                    {isSavingPolicy ? 'Guardando en Neon DB...' : 'Guardar Políticas de Cuadre'}
+                  </button>
+                </div>
+              </form>
+            ) : null}
+          </div>
+        )}
+
         {/* CSV Ingestion Modal */}
         {isIngestingCSV && (
           <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
@@ -1076,23 +1371,88 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW 2: SUPERADMIN TENANTS (REAL NEON DATA) */}
+        {/* VIEW 2: SUPERADMIN TENANTS (REAL NEON DATA & METRICS) */}
         {activeView === 'superadmin_tenants' && (
           <div>
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div>
-                <h1 className="text-2xl font-bold text-[#0B2545]">Gestión de Tenants (Clientes SaaS)</h1>
-                <p className="text-xs text-[var(--muted-foreground)]">
-                  Tenants activos en Neon DB con aislamiento criptográfico Cloud KMS y buckets dedicados.
+                <h1 className="text-2xl font-bold text-[#0B2545]">Gestión de Tenants y Consumo de Cuotas</h1>
+                <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                  Tenants activos en Neon DB con aislamiento criptográfico Cloud KMS (CMEK Santiago), almacenamiento WORM y medición de cuotas SaaS.
                 </p>
               </div>
               <button
                 onClick={() => setIsCreatingTenant(true)}
-                className="px-4 py-2 bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-semibold rounded-md shadow-sm transition-colors flex items-center gap-1.5"
+                className="px-4 py-2 bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-semibold rounded-md shadow-xs transition-colors flex items-center gap-1.5 self-start"
               >
                 <Plus className="w-4 h-4" /> Aprovisionar Nuevo Tenant
               </button>
             </div>
+
+            {/* Platform KPI Grid matching fpaflux_new */}
+            {platformStats && (
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6 text-xs">
+                <div className="bg-white border border-[var(--border)] rounded-xl p-4 shadow-xs">
+                  <span className="text-[11px] uppercase font-bold text-[var(--muted-foreground)] block mb-1">
+                    Tenants Activos
+                  </span>
+                  <div className="text-2xl font-black text-[#176B3F] font-mono">
+                    {platformStats.active_tenants}
+                  </div>
+                  <span className="text-[10px] text-[var(--muted-foreground)]">En producción</span>
+                </div>
+
+                <div className="bg-white border border-[var(--border)] rounded-xl p-4 shadow-xs">
+                  <span className="text-[11px] uppercase font-bold text-[var(--muted-foreground)] block mb-1">
+                    En Prueba / Trial
+                  </span>
+                  <div className="text-2xl font-black text-blue-600 font-mono">
+                    {platformStats.trial_tenants}
+                  </div>
+                  <span className="text-[10px] text-[var(--muted-foreground)]">30 días de prueba</span>
+                </div>
+
+                <div className="bg-white border border-[var(--border)] rounded-xl p-4 shadow-xs">
+                  <span className="text-[11px] uppercase font-bold text-[var(--muted-foreground)] block mb-1">
+                    Suspendidos
+                  </span>
+                  <div className="text-2xl font-black text-amber-700 font-mono">
+                    {platformStats.suspended_tenants}
+                  </div>
+                  <span className="text-[10px] text-[var(--muted-foreground)]">Por falta de pago</span>
+                </div>
+
+                <div className="bg-white border border-[var(--border)] rounded-xl p-4 shadow-xs">
+                  <span className="text-[11px] uppercase font-bold text-[var(--muted-foreground)] block mb-1">
+                    Proveedores
+                  </span>
+                  <div className="text-2xl font-black text-[#0B2545] font-mono">
+                    {platformStats.total_suppliers}
+                  </div>
+                  <span className="text-[10px] text-[var(--muted-foreground)]">Efecto Red Global</span>
+                </div>
+
+                <div className="bg-white border border-[var(--border)] rounded-xl p-4 shadow-xs">
+                  <span className="text-[11px] uppercase font-bold text-[var(--muted-foreground)] block mb-1">
+                    Facturas Mes
+                  </span>
+                  <div className="text-2xl font-black text-[#0B2545] font-mono">
+                    {platformStats.total_monthly_invoices}
+                  </div>
+                  <span className="text-[10px] text-[var(--muted-foreground)]">Procesadas en RVA</span>
+                </div>
+
+                <div className="bg-white border border-[#CBE9E5] bg-[#F4FAF9] rounded-xl p-4 shadow-xs">
+                  <span className="text-[11px] uppercase font-bold text-[#0A7469] block mb-1">
+                    Auto-Match CEL
+                  </span>
+                  <div className="text-2xl font-black text-[#0A7469] font-mono">
+                    {platformStats.auto_match_ratio.toFixed(1)}%
+                  </div>
+                  <span className="text-[10px] text-[#0A7469]">Conciliadas sin fricción</span>
+                </div>
+              </div>
+            )}
 
             {/* Modal de Aprovisionamiento */}
             {isCreatingTenant && (
@@ -1100,7 +1460,7 @@ export default function App() {
                 <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 border border-[var(--border)]">
                   <h3 className="text-base font-bold text-[#0B2545] mb-2">Aprovisionar Nuevo Tenant Corporativo</h3>
                   <p className="text-xs text-[var(--muted-foreground)] mb-4">
-                    Se creará la entrada en Neon DB con claves compuestas y se asignará la llave Cloud KMS.
+                    Se creará la entrada en Neon DB con claves compuestas, se asignará la llave Cloud KMS y políticas de cuadre CEL.
                   </p>
                   <form onSubmit={handleCreateTenantSubmit} className="space-y-3 text-xs">
                     <div>
@@ -1137,6 +1497,18 @@ export default function App() {
                         className="w-full border border-[var(--border)] rounded p-2 font-mono"
                       />
                     </div>
+                    <div>
+                      <label className="block font-medium mb-1">Plan Comercial SaaS</label>
+                      <select
+                        value={newTenantPlan}
+                        onChange={(e) => setNewTenantPlan(e.target.value)}
+                        className="w-full border border-[var(--border)] rounded p-2 bg-white"
+                      >
+                        <option value="starter">Starter (Pyme) — S/ 150.00/mes</option>
+                        <option value="growth">Growth (Mediana Empresa) — S/ 450.00/mes</option>
+                        <option value="enterprise">Enterprise Corporativo — S/ 1,200.00/mes</option>
+                      </select>
+                    </div>
                     <div className="flex justify-end gap-2 pt-3">
                       <button
                         type="button"
@@ -1168,26 +1540,218 @@ export default function App() {
                   <thead>
                     <tr className="border-b border-[var(--border)] bg-[var(--muted)]/50 text-[var(--muted-foreground)] uppercase font-medium">
                       <th className="py-3 px-6">Empresa / Razón Social</th>
-                      <th className="py-3 px-6">RUC</th>
-                      <th className="py-3 px-6">Slug</th>
-                      <th className="py-3 px-6">Seguridad CMEK</th>
+                      <th className="py-3 px-6">Plan y Límites</th>
+                      <th className="py-3 px-6">Consumo de Facturas</th>
+                      <th className="py-3 px-6">Proveedores Activos</th>
+                      <th className="py-3 px-6">Seguridad CMEK & Bucket</th>
+                      <th className="py-3 px-6 text-center">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border)]">
+                    {tenants.map((t) => {
+                      const used = t.monthly_invoices_used || 0;
+                      const max = t.max_monthly_invoices || 1500;
+                      const pct = Math.min(100, Math.round((used / max) * 100));
+                      return (
+                        <tr key={t.id} className="hover:bg-[var(--muted)]/40 transition-colors">
+                          <td className="py-4 px-6">
+                            <span className="font-semibold text-[#0B2545] block">{t.name}</span>
+                            <span className="font-mono text-[11px] text-[var(--muted-foreground)]">RUC: {t.ruc} · slug: {t.slug}</span>
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className="font-bold text-[#0A7469]">{t.plan_name || t.plan_code.toUpperCase()}</span>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="w-36">
+                              <div className="flex justify-between text-[11px] font-mono mb-1">
+                                <span>{used} / {max}</span>
+                                <span className="font-semibold">{pct}%</span>
+                              </div>
+                              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${pct > 80 ? 'bg-rose-500' : 'bg-[#0A7469]'}`}
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6 font-mono text-[11px]">
+                            {t.active_suppliers_count || 0} / {t.max_suppliers || 250}
+                          </td>
+                          <td className="py-4 px-6 font-mono text-[11px] text-[var(--muted-foreground)]">
+                            <span className="flex items-center gap-1 text-[#176B3F] font-semibold mb-0.5">
+                              <Lock className="w-3 h-3" /> CMEK Activa
+                            </span>
+                            <span className="text-[10px] truncate max-w-xs block opacity-75">{t.kms_key_id}</span>
+                          </td>
+                          <td className="py-4 px-6 text-center">
+                            <button
+                              onClick={() => handleToggleTenantStatus(t.id, t.status)}
+                              className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors ${
+                                t.status === 'active'
+                                  ? 'bg-[#E7F5EC] hover:bg-rose-100 text-[#176B3F] hover:text-rose-700'
+                                  : 'bg-rose-100 hover:bg-[#E7F5EC] text-rose-800 hover:text-[#176B3F]'
+                              }`}
+                              title={t.status === 'active' ? 'Click para suspender acceso' : 'Click para reactivar'}
+                            >
+                              {t.status === 'active' ? 'ACTIVO' : 'SUSPENDIDO'}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* VIEW 3: SUPERADMIN JIT SUPPORT (PRIVILEGED ACCESS MANAGER) */}
+        {activeView === 'superadmin_jit' && (
+          <div>
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h1 className="text-2xl font-bold text-[#0B2545] flex items-center gap-2">
+                  <Key className="w-6 h-6 text-[#0A7469]" />
+                  Acceso JIT de Soporte (Just-In-Time)
+                </h1>
+                <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                  Elevación temporal de privilegios de soporte técnico con ventana de auto-expiración y registro en la cadena SHA-256.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsRequestingJIT(true)}
+                className="px-4 py-2 bg-[#0B2545] hover:bg-[#15345C] text-white text-xs font-semibold rounded-md shadow-xs transition-colors flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4 text-[#4FC9BE]" /> Solicitar Acceso Temporal JIT
+              </button>
+            </div>
+
+            {/* Modal de Solicitud JIT */}
+            {isRequestingJIT && (
+              <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 border border-[var(--border)]">
+                  <h3 className="text-base font-bold text-[#0B2545] mb-2">Solicitar Acceso Temporal JIT (PAM)</h3>
+                  <p className="text-xs text-[var(--muted-foreground)] mb-4">
+                    Se generará un token temporal con vencimiento estricto y se creará un bloque inmutable en <code>audit_events</code>.
+                  </p>
+                  <form onSubmit={handleCreateJITSession} className="space-y-3 text-xs">
+                    <div>
+                      <label className="block font-medium mb-1">Tenant Destino</label>
+                      <select
+                        value={jitTargetTenantId}
+                        onChange={(e) => setJitTargetTenantId(e.target.value)}
+                        className="w-full border border-[var(--border)] rounded p-2 bg-white"
+                      >
+                        {tenants.map((t) => (
+                          <option key={t.id} value={t.id}>{t.name} ({t.ruc})</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-medium mb-1">Email del Solicitante</label>
+                      <input
+                        type="email"
+                        required
+                        value={jitEmail}
+                        onChange={(e) => setJitEmail(e.target.value)}
+                        className="w-full border border-[var(--border)] rounded p-2 font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-medium mb-1">Motivo Justificado (Ticket / Incidente)</label>
+                      <textarea
+                        rows={2}
+                        required
+                        placeholder="Ej: Incidente INC-4029: Diagnóstico de discrepancia en comprobante F001-4523"
+                        value={jitReason}
+                        onChange={(e) => setJitReason(e.target.value)}
+                        className="w-full border border-[var(--border)] rounded p-2"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-medium mb-1">Duración del Acceso</label>
+                      <select
+                        value={jitDurationHours}
+                        onChange={(e) => setJitDurationHours(parseInt(e.target.value) || 2)}
+                        className="w-full border border-[var(--border)] rounded p-2 bg-white"
+                      >
+                        <option value={1}>1 hora (Diagnóstico puntual)</option>
+                        <option value={2}>2 horas (Investigación técnica)</option>
+                        <option value={4}>4 horas (Máximo permitido por política de seguridad)</option>
+                      </select>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-3">
+                      <button
+                        type="button"
+                        onClick={() => setIsRequestingJIT(false)}
+                        className="px-3 py-1.5 border border-[var(--border)] rounded font-medium"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-1.5 bg-[#0B2545] text-white rounded font-medium hover:bg-[#15345C]"
+                      >
+                        Aprobar y Registrar
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* JIT Sessions Table */}
+            <div className="bg-white border border-[var(--border)] rounded-[10px] shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-[var(--border)] flex justify-between items-center">
+                <span className="font-semibold text-sm">Historial de Sesiones de Soporte JIT</span>
+              </div>
+
+              {loading ? (
+                <div className="p-12 text-center text-sm text-[var(--muted-foreground)] flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-[#0A7469]" />
+                  <span>Consultando sesiones JIT en Neon DB...</span>
+                </div>
+              ) : jitSessions.length === 0 ? (
+                <div className="p-12 text-center text-xs text-[var(--muted-foreground)]">
+                  <Key className="w-8 h-8 text-[var(--muted-foreground)] mx-auto mb-2 opacity-50" />
+                  <p className="font-semibold text-[var(--foreground)]">No hay sesiones JIT registradas</p>
+                  <p className="text-xs mt-1">Utilice el botón superior para solicitar una elevación temporal de privilegios.</p>
+                </div>
+              ) : (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--border)] bg-[var(--muted)]/50 text-[var(--muted-foreground)] uppercase font-medium">
+                      <th className="py-3 px-6">Tenant Destino</th>
+                      <th className="py-3 px-6">Solicitante</th>
+                      <th className="py-3 px-6">Motivo Justificado</th>
+                      <th className="py-3 px-6">Vencimiento</th>
                       <th className="py-3 px-6 text-center">Estado</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border)]">
-                    {tenants.map((t) => (
-                      <tr key={t.id} className="hover:bg-[var(--muted)]/40 transition-colors">
-                        <td className="py-4 px-6 font-semibold text-[#0B2545]">{t.name}</td>
-                        <td className="py-4 px-6 font-mono">{t.ruc}</td>
-                        <td className="py-4 px-6 font-mono text-[var(--muted-foreground)]">{t.slug}</td>
+                    {jitSessions.map((s) => (
+                      <tr key={s.id} className="hover:bg-[var(--muted)]/40 transition-colors">
+                        <td className="py-4 px-6 font-semibold text-[#0B2545]">{s.tenant_name}</td>
+                        <td className="py-4 px-6 font-mono text-[var(--muted-foreground)]">{s.requester_email}</td>
+                        <td className="py-4 px-6 text-xs">{s.reason}</td>
                         <td className="py-4 px-6 font-mono text-[11px] text-[var(--muted-foreground)]">
-                          <span className="flex items-center gap-1 text-[#176B3F]">
-                            <Lock className="w-3 h-3" /> CMEK Activa
-                          </span>
+                          {formatDate(s.expires_at)}
                         </td>
                         <td className="py-4 px-6 text-center">
-                          <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#E7F5EC] text-[#176B3F]">
-                            {t.status.toUpperCase()}
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
+                              s.status === 'active'
+                                ? 'bg-[#E7F5EC] text-[#176B3F]'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {s.status.toUpperCase()}
                           </span>
                         </td>
                       </tr>
@@ -1199,139 +1763,116 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW 3: SUPERADMIN JIT SUPPORT */}
-        {activeView === 'superadmin_jit' && (
-          <div className="max-w-4xl mx-auto">
-            <div className="mb-6">
-              <h1 className="text-2xl font-bold text-[#0B2545]">Acceso JIT de Soporte (Just-In-Time)</h1>
-              <p className="text-xs text-[var(--muted-foreground)]">
-                Protocolo estricto de acceso temporal a datos de tenants para soporte técnico con ventana de expiración y auditoría inmutable.
-              </p>
-            </div>
-
-            <div className="bg-white border border-[var(--border)] rounded-[10px] p-6 shadow-sm mb-6">
-              <h2 className="text-sm font-semibold mb-4 text-[#0B2545] flex items-center gap-2">
-                <Key className="w-4 h-4 text-[#0A7469]" /> Solicitar Sesión de Soporte JIT
-              </h2>
-
-              <div className="space-y-4 text-xs">
-                <div>
-                  <label className="block font-medium mb-1 text-[var(--foreground)]">Seleccionar Tenant Destino</label>
-                  <select className="w-full border border-[var(--border)] rounded-md p-2 bg-white">
-                    <option>La Bodega de la Trattoria S.A.C. (RUC 20501234567)</option>
-                    <option>Corporación Alimentos RVA S.A. (RUC 20609876543)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-medium mb-1 text-[var(--foreground)]">Motivo Obligatorio del Soporte (Ticket / Incidente)</label>
-                  <input
-                    type="text"
-                    placeholder="Ej. Incidente INC-4021: Diagnóstico de descalce en factura F001-0004523"
-                    className="w-full border border-[var(--border)] rounded-md p-2"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-medium mb-1 text-[var(--foreground)]">Ventana Temporal de Acceso</label>
-                  <select className="w-full border border-[var(--border)] rounded-md p-2 bg-white">
-                    <option>1 hora (Diagnóstico puntual)</option>
-                    <option>2 horas (Investigación técnica)</option>
-                    <option>4 horas (Máximo permitido por política de seguridad)</option>
-                  </select>
-                </div>
-
-                <div className="p-3 bg-[#FDF3DC] text-[#8A5A00] rounded-md text-[11px]">
-                  <strong>Aviso de Seguridad:</strong> La apertura de esta sesión registrará tu identidad, IP y huella digital en la cadena inmutable de auditoría del cliente y notificará inmediatamente al Oficial de Seguridad del tenant.
-                </div>
-
-                <button
-                  onClick={() => alert('Sesión JIT autorizada por 1 hora. El token de sesión temporal y el evento de auditoría han sido registrados en Neon DB.')}
-                  className="px-5 py-2.5 bg-[#0B2545] text-white font-medium rounded-md hover:bg-[#1F3558] transition-colors"
-                >
-                  Generar Acceso JIT Auditado
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* VIEW 4: SUPERADMIN AUDIT */}
+        {/* VIEW 4: SUPERADMIN AUDIT (CHAINED CRYPTOGRAPHIC SHA-256 LOGS) */}
         {activeView === 'superadmin_audit' && (
           <div>
             <div className="mb-6">
-              <h1 className="text-2xl font-bold text-[#0B2545]">Auditoría Criptográfica Inmutable</h1>
-              <p className="text-xs text-[var(--muted-foreground)]">
-                Registro de eventos de la plataforma en Neon DB con encadenamiento SHA-256 (Tamper-Evident Hash Chaining).
+              <h1 className="text-2xl font-bold text-[#0B2545] flex items-center gap-2">
+                <Shield className="w-6 h-6 text-[#0A7469]" />
+                Auditoría Criptográfica Inmutable (SHA-256)
+              </h1>
+              <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                Registro inmutable de transacciones críticas en Neon DB protegido con función trigger ante modificaciones o eliminaciones.
               </p>
             </div>
 
-            <div className="bg-white border border-[var(--border)] rounded-[10px] p-6 shadow-sm">
-              <div className="flex items-center justify-between pb-4 border-b border-[var(--border)] mb-4">
-                <span className="text-xs font-semibold">Últimos Eventos Encadenados en Base de Datos</span>
-                <span className="text-xs text-[#176B3F] font-mono flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Cadena Hash Verificada
+            <div className="bg-white border border-[var(--border)] rounded-[10px] shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-[var(--border)] flex justify-between items-center">
+                <span className="font-semibold text-sm">Cadena Tamper-Evident de Eventos de Auditoría</span>
+                <span className="text-xs text-[#176B3F] font-mono flex items-center gap-1 font-semibold">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Integridad de Hash Verificada
                 </span>
               </div>
 
-              <div className="space-y-3 font-mono text-[11px]">
-                <div className="p-3 bg-[var(--muted)]/40 rounded border border-[var(--border)]">
-                  <div className="flex justify-between text-[var(--muted-foreground)] text-[10px] mb-1">
-                    <span>2026-11-03 13:48:27 UTC</span>
-                    <span className="text-[#0A7469] font-bold">PLATFORM_INITIALIZATION</span>
-                  </div>
-                  <p className="text-[#0B2545] font-sans font-medium mb-1">
-                    Semillas de producción aplicadas en Neon DB (Tenants, Proveedores y Comprobantes).
-                  </p>
-                  <p className="text-[10px] text-[var(--muted-foreground)] truncate">
-                    Hash Actual: 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
-                  </p>
+              {loading ? (
+                <div className="p-12 text-center text-sm text-[var(--muted-foreground)] flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-[#0A7469]" />
+                  <span>Validando cadena criptográfica en Neon DB...</span>
                 </div>
-              </div>
+              ) : (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--border)] bg-[var(--muted)]/50 text-[var(--muted-foreground)] uppercase font-medium">
+                      <th className="py-3 px-6">ID & Fecha</th>
+                      <th className="py-3 px-6">Actor</th>
+                      <th className="py-3 px-6">Acción</th>
+                      <th className="py-3 px-6">Entidad Afectada</th>
+                      <th className="py-3 px-6 font-mono">Hash Criptográfico SHA-256</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border)] font-mono text-[11px]">
+                    {auditEvents.map((ev) => (
+                      <tr key={ev.id} className="hover:bg-[var(--muted)]/40 transition-colors">
+                        <td className="py-4 px-6 font-semibold">
+                          #{ev.id} <span className="block text-[10px] font-normal text-[var(--muted-foreground)]">{formatDate(ev.created_at)}</span>
+                        </td>
+                        <td className="py-4 px-6 font-sans">{ev.actor_email}</td>
+                        <td className="py-4 px-6 font-bold text-[#0A7469]">{ev.action}</td>
+                        <td className="py-4 px-6 text-[var(--muted-foreground)]">{ev.entity_name}</td>
+                        <td className="py-4 px-6 text-[10px] text-slate-600 truncate max-w-xs">
+                          {ev.current_event_hash}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         )}
 
-        {/* VIEW 5: SUPERADMIN PLANS */}
+        {/* VIEW 5: SUPERADMIN PLANS (REAL PLANS FROM NEON DB) */}
         {activeView === 'superadmin_plans' && (
           <div>
             <div className="mb-6">
-              <h1 className="text-2xl font-bold text-[#0B2545]">Catálogo de Planes y Cuotas</h1>
-              <p className="text-xs text-[var(--muted-foreground)]">
-                Definición de límites comerciales almacenados en la tabla tenant_plans de Neon DB.
+              <h1 className="text-2xl font-bold text-[#0B2545]">Catálogo de Planes Comerciales y Cuotas</h1>
+              <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                Límites y precios almacenados en la tabla <code>tenant_plans</code> de Neon DB aplicados mediante el motor de entitlements.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-white border border-[var(--border)] rounded-xl p-5 shadow-sm">
-                <h3 className="font-bold text-base mb-1">Starter (Pyme)</h3>
-                <span className="text-xl font-bold font-mono text-[#0A7469] block mb-3">S/ 150.00 / mes</span>
-                <ul className="text-xs space-y-2 text-[var(--muted-foreground)]">
-                  <li>Proveedores activos: <strong>50</strong></li>
-                  <li>Facturas mensuales: <strong>200</strong></li>
-                  <li>3-Way Match: Básico (CSV)</li>
-                </ul>
-              </div>
-
-              <div className="bg-white border-2 border-[#0A7469] rounded-xl p-5 shadow-sm">
-                <h3 className="font-bold text-base mb-1">Growth (Mediana Empresa)</h3>
-                <span className="text-xl font-bold font-mono text-[#0A7469] block mb-3">S/ 450.00 / mes</span>
-                <ul className="text-xs space-y-2 text-[var(--muted-foreground)]">
-                  <li>Proveedores activos: <strong>250</strong></li>
-                  <li>Facturas mensuales: <strong>1,500</strong></li>
-                  <li>3-Way Match: Motor CEL Automático</li>
-                </ul>
-              </div>
-
-              <div className="bg-white border border-[var(--border)] rounded-xl p-5 shadow-sm">
-                <h3 className="font-bold text-base mb-1">Enterprise Corporativo</h3>
-                <span className="text-xl font-bold font-mono text-[#0A7469] block mb-3">S/ 1,200.00 / mes</span>
-                <ul className="text-xs space-y-2 text-[var(--muted-foreground)]">
-                  <li>Proveedores activos: <strong>Ilimitados</strong></li>
-                  <li>Facturas mensuales: <strong>Ilimitadas</strong></li>
-                  <li>Integración: SAP S/4HANA OData + Agente Go</li>
-                </ul>
-              </div>
+              {plans.map((p) => (
+                <div
+                  key={p.code}
+                  className={`bg-white rounded-xl p-6 shadow-sm border transition-all ${
+                    p.code === 'growth' ? 'border-2 border-[#0A7469] relative shadow-md' : 'border-[var(--border)]'
+                  }`}
+                >
+                  {p.code === 'growth' && (
+                    <span className="absolute -top-3 left-6 bg-[#0A7469] text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      Más Popular
+                    </span>
+                  )}
+                  <h3 className="font-bold text-base text-[#0B2545] mb-1">{p.name}</h3>
+                  <span className="text-2xl font-black font-mono text-[#0A7469] block mb-4">
+                    {formatCurrency(p.price_pen, 'PEN')} <span className="text-xs font-normal text-[var(--muted-foreground)]">/ mes</span>
+                  </span>
+                  <ul className="text-xs space-y-2 text-[var(--muted-foreground)] mb-6">
+                    <li className="flex items-center gap-1.5 text-[#0B2545]">
+                      <CheckCircle2 className="w-4 h-4 text-[#0A7469] shrink-0" />
+                      Proveedores activos: <strong>{p.max_suppliers === -1 ? 'Ilimitados' : p.max_suppliers}</strong>
+                    </li>
+                    <li className="flex items-center gap-1.5 text-[#0B2545]">
+                      <CheckCircle2 className="w-4 h-4 text-[#0A7469] shrink-0" />
+                      Facturas mensuales: <strong>{p.max_monthly_invoices === -1 ? 'Ilimitadas' : p.max_monthly_invoices}</strong>
+                    </li>
+                    <li className="flex items-center gap-1.5 text-[#0B2545]">
+                      <CheckCircle2 className="w-4 h-4 text-[#0A7469] shrink-0" />
+                      Aislamiento: <strong>Cloud KMS CMEK Dedicado</strong>
+                    </li>
+                    <li className="flex items-center gap-1.5 text-[#0B2545]">
+                      <CheckCircle2 className="w-4 h-4 text-[#0A7469] shrink-0" />
+                      Motor CEL: <strong>Tolerancias Dinámicas</strong>
+                    </li>
+                  </ul>
+                  <div className="pt-4 border-t border-[var(--border)] text-center">
+                    <span className="text-[11px] font-semibold text-[#0A7469] font-mono">
+                      Código Plan: {p.code}
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
