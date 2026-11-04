@@ -34,6 +34,9 @@ export interface TenantSummary {
   max_monthly_invoices?: number;
   active_suppliers_count?: number;
   max_suppliers?: number;
+  client_users_count?: number;
+  supplier_users_count?: number;
+  plan_expires_at?: string;
   created_at?: string;
 }
 
@@ -108,10 +111,13 @@ export interface WhatsAppSimulationResponse {
 export interface CommercialPlan {
   code: string;
   name: string;
+  description?: string;
   max_suppliers: number;
   max_monthly_invoices: number;
+  price_cents?: number;
   price_pen: number;
   currency: string;
+  features?: string[];
   is_active: boolean;
 }
 
@@ -420,8 +426,26 @@ export class FactumfluxClient {
     });
   }
 
+  async renewTenantPlan(tenantId: string, data: { plan_code?: string; months_to_add: number }): Promise<TenantSummary> {
+    return this.fetch(`/api/admin/tenants/${tenantId}/renew`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   async listPlans(): Promise<CommercialPlan[]> {
     return this.fetch('/api/admin/plans');
+  }
+
+  async updatePlan(code: string, data: Partial<CommercialPlan>): Promise<CommercialPlan> {
+    return this.fetch(`/api/admin/plans/${code}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getPublicPlans(): Promise<CommercialPlan[]> {
+    return this.fetch('/api/v1/plans');
   }
 
   async listJITSessions(): Promise<JITSupportSession[]> {

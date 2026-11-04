@@ -28,6 +28,9 @@ export default function LandingPage() {
 
   // Dynamic URLs: resolve to production Cloud Run URLs unless developing on localhost
   const isLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+  const apiBaseUrl =
+    (import.meta as any).env?.VITE_API_BASE_URL ||
+    (isLocal ? 'http://localhost:8080' : 'https://factumflux-backend-pxeov3gtya-tl.a.run.app');
   const portalUrl =
     (import.meta as any).env?.VITE_PORTAL_URL ||
     (isLocal ? 'http://localhost:3000' : 'https://factumflux-portal-proveedor-pxeov3gtya-tl.a.run.app');
@@ -35,6 +38,88 @@ export default function LandingPage() {
     (import.meta as any).env?.VITE_BACKOFFICE_URL ||
     (isLocal ? 'http://localhost:3001' : 'https://factumflux-backoffice-pxeov3gtya-tl.a.run.app');
   const superadminUrl = `${backofficeUrl}?portal=superadmin`;
+
+  // Commercial plans dynamically fed from SuperAdmin SaaS configuration
+  const [commercialPlans, setCommercialPlans] = useState<any[]>([
+    {
+      code: 'starter',
+      name: 'Starter (Pyme)',
+      description: 'Para pymes y empresas en crecimiento.',
+      price_pen: 150,
+      max_suppliers: 50,
+      max_monthly_invoices: 200,
+      features: [
+        'Hasta 50 proveedores activos',
+        'Hasta 200 facturas mensuales',
+        'Validación SUNAT UBL 2.1',
+        'Ingesta de OC por archivo CSV',
+      ],
+    },
+    {
+      code: 'growth',
+      name: 'Growth (Mediana Empresa)',
+      description: 'Para medianas empresas con alto volumen.',
+      price_pen: 450,
+      max_suppliers: 250,
+      max_monthly_invoices: 1500,
+      is_popular: true,
+      features: [
+        'Hasta 250 proveedores activos',
+        'Hasta 1,500 facturas mensuales',
+        'Motor de 3-Way Match automático',
+        'Alerta de Factura Negociable (8 días)',
+        'Soporte prioritario',
+      ],
+    },
+    {
+      code: 'enterprise',
+      name: 'Enterprise Corporativo',
+      description: 'Para corporativos y holdings multirazón social.',
+      price_pen: 1200,
+      max_suppliers: 2000,
+      max_monthly_invoices: 15000,
+      features: [
+        'Proveedores activos ilimitados',
+        '15,000+ facturas al mes',
+        'CMEK en Google Cloud KMS exclusivo',
+        'Integración nativa SAP S/4HANA',
+        'Auditoría SHA-256 inmutable',
+        'SLA 99.9% garantizado',
+      ],
+    },
+  ]);
+
+  useEffect(() => {
+    fetch(`${apiBaseUrl}/api/v1/plans`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          const active = data.filter((p: any) => p.is_active);
+          if (active.length > 0) {
+            setCommercialPlans(
+              active.map((p: any) => ({
+                code: p.code,
+                name: p.name,
+                description: p.description || (p.code === 'starter' ? 'Para pymes y empresas en crecimiento.' : p.code === 'growth' ? 'Para medianas empresas con alto volumen.' : 'Para corporativos y holdings multirazón social.'),
+                price_pen: p.price_pen || (p.price_cents ? p.price_cents / 100 : 0),
+                max_suppliers: p.max_suppliers,
+                max_monthly_invoices: p.max_monthly_invoices,
+                is_popular: p.code === 'growth',
+                features: Array.isArray(p.features) && p.features.length > 0
+                  ? p.features
+                  : [
+                      `Hasta ${p.max_suppliers} proveedores activos`,
+                      `Hasta ${p.max_monthly_invoices} facturas mensuales`,
+                      'Cruce 3-Way Match automático',
+                      'Validación SUNAT en tiempo real',
+                    ],
+              }))
+            );
+          }
+        }
+      })
+      .catch(() => {});
+  }, [apiBaseUrl]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -461,73 +546,58 @@ export default function LandingPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Starter */}
-            <div className="bg-white border border-[#E2E7EE] rounded-2xl p-8 shadow-sm flex flex-col justify-between">
-              <div>
-                <h3 className="text-xl font-bold text-[#0B2545] mb-1">Starter</h3>
-                <p className="text-xs text-[#5B6B7F] mb-6">Para pymes y empresas en crecimiento.</p>
-                <div className="mb-6">
-                  <span className="text-4xl font-extrabold font-mono text-[#0B2545]">S/ 150</span>
-                  <span className="text-sm text-[#5B6B7F]"> / mes</span>
-                </div>
-                <ul className="space-y-3 text-sm text-[#5B6B7F] mb-8">
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-[#176B3F]" /> Hasta 50 proveedores activos</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-[#176B3F]" /> Hasta 200 facturas mensuales</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-[#176B3F]" /> Validación SUNAT UBL 2.1</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-[#176B3F]" /> Ingesta de OC por archivo CSV</li>
-                </ul>
-              </div>
-              <button className="w-full py-2.5 border border-[#0A7469] text-[#0A7469] hover:bg-[#E8F4F2] font-semibold rounded-lg transition-colors">
-                Elegir Starter
-              </button>
-            </div>
+            {commercialPlans.map((plan: any) => {
+              const isPopular = plan.is_popular;
+              return (
+                <div
+                  key={plan.code}
+                  className={`bg-white rounded-2xl p-8 shadow-sm flex flex-col justify-between transition-all relative ${
+                    isPopular
+                      ? 'border-2 border-[#0A7469] shadow-lg'
+                      : 'border border-[#E2E7EE]'
+                  }`}
+                >
+                  {isPopular && (
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#0A7469] text-white text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full shadow-sm">
+                      Más elegido
+                    </div>
+                  )}
 
-            {/* Growth */}
-            <div className="bg-white border-2 border-[#0A7469] rounded-2xl p-8 shadow-lg relative flex flex-col justify-between">
-              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#0A7469] text-white text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full">
-                Más elegido
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-[#0B2545] mb-1">Growth</h3>
-                <p className="text-xs text-[#5B6B7F] mb-6">Para medianas empresas con alto volumen.</p>
-                <div className="mb-6">
-                  <span className="text-4xl font-extrabold font-mono text-[#0B2545]">S/ 450</span>
-                  <span className="text-sm text-[#5B6B7F]"> / mes</span>
-                </div>
-                <ul className="space-y-3 text-sm text-[#5B6B7F] mb-8">
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-[#176B3F]" /> Hasta 250 proveedores activos</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-[#176B3F]" /> Hasta 1,500 facturas mensuales</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-[#176B3F]" /> Motor de 3-Way Match automático</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-[#176B3F]" /> Alerta de Factura Negociable (8 días)</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-[#176B3F]" /> Soporte prioritario</li>
-                </ul>
-              </div>
-              <button className="w-full py-2.5 bg-[#0A7469] hover:bg-[#075A52] text-white font-semibold rounded-lg shadow-sm transition-colors">
-                Elegir Growth
-              </button>
-            </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-[#0B2545] mb-1">{plan.name}</h3>
+                    <p className="text-xs text-[#5B6B7F] mb-6">{plan.description}</p>
+                    <div className="mb-6">
+                      <span className="text-4xl font-extrabold font-mono text-[#0B2545]">
+                        S/ {plan.price_pen}
+                      </span>
+                      <span className="text-sm text-[#5B6B7F]"> / mes</span>
+                    </div>
 
-            {/* Enterprise */}
-            <div className="bg-white border border-[#E2E7EE] rounded-2xl p-8 shadow-sm flex flex-col justify-between">
-              <div>
-                <h3 className="text-xl font-bold text-[#0B2545] mb-1">Enterprise</h3>
-                <p className="text-xs text-[#5B6B7F] mb-6">Para corporativos y holdings multirazón social.</p>
-                <div className="mb-6">
-                  <span className="text-4xl font-extrabold font-mono text-[#0B2545]">S/ 1,200</span>
-                  <span className="text-sm text-[#5B6B7F]"> / mes</span>
+                    <ul className="space-y-3 text-sm text-[#5B6B7F] mb-8">
+                      {(plan.features || []).map((feat: string, fIdx: number) => (
+                        <li key={fIdx} className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-[#0A7469] flex-shrink-0" />
+                          <span>{feat}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <a
+                    href={backofficeUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`w-full py-2.5 rounded-lg font-semibold text-center text-sm transition-colors block ${
+                      isPopular
+                        ? 'bg-[#0A7469] hover:bg-[#075A52] text-white shadow-sm'
+                        : 'border border-[#0B2545] text-[#0B2545] hover:bg-[#F3F5F8]'
+                    }`}
+                  >
+                    Elegir {plan.name}
+                  </a>
                 </div>
-                <ul className="space-y-3 text-sm text-[#5B6B7F] mb-8">
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-[#176B3F]" /> Proveedores y facturas ilimitadas</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-[#176B3F]" /> Conector SAP S/4HANA OData / Agente Go</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-[#176B3F]" /> Clave Cloud KMS (CMEK) dedicada</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-[#176B3F]" /> Soporte JIT con auditoría estricta</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-[#176B3F]" /> SSO corporativo (SAML / OIDC)</li>
-                </ul>
-              </div>
-              <button className="w-full py-2.5 border border-[#0B2545] text-[#0B2545] hover:bg-[#F3F5F8] font-semibold rounded-lg transition-colors">
-                Contactar Ventas
-              </button>
-            </div>
+              );
+            })}
           </div>
         </div>
       </section>

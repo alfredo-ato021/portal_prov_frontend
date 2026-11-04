@@ -1,12 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import {
-  ShieldAlert,
   Building2,
   Layers,
   Key,
   Shield,
-  ArrowLeft,
   Plus,
+  RefreshCw,
+  LogOut,
+  Calendar,
+  Users,
+  CheckCircle2,
+  XCircle,
+  Edit3,
+  ShieldCheck,
+  X,
+  Lock,
 } from 'lucide-react';
 import {
   FactumfluxClient,
@@ -33,15 +41,31 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
   const [jitSessions, setJitSessions] = useState<JITSupportSession[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   // New tenant form modal
   const [showNewTenant, setShowNewTenant] = useState(false);
   const [newTenantName, setNewTenantName] = useState('');
   const [newTenantSlug, setNewTenantSlug] = useState('');
   const [newTenantRuc, setNewTenantRuc] = useState('');
-  const [newTenantPlan, setNewTenantPlan] = useState('PRO');
+  const [newTenantPlan, setNewTenantPlan] = useState('growth');
 
-  // New JIT session form modal
+  // Renew tenant plan modal
+  const [renewingTenant, setRenewingTenant] = useState<TenantSummary | null>(null);
+  const [renewMonths, setRenewMonths] = useState(12);
+  const [renewNewPlanCode, setRenewNewPlanCode] = useState('');
+
+  // Edit plan modal
+  const [editingPlan, setEditingPlan] = useState<CommercialPlan | null>(null);
+  const [editPlanName, setEditPlanName] = useState('');
+  const [editPlanPrice, setEditPlanPrice] = useState(0);
+  const [editPlanSuppliers, setEditPlanSuppliers] = useState(0);
+  const [editPlanInvoices, setEditPlanInvoices] = useState(0);
+  const [editPlanFeatures, setEditPlanFeatures] = useState<string[]>([]);
+  const [newFeatureText, setNewFeatureText] = useState('');
+  const [editPlanActive, setEditPlanActive] = useState(true);
+
+  // New JIT session modal
   const [showNewJit, setShowNewJit] = useState(false);
   const [jitTenantId, setJitTenantId] = useState('');
   const [jitReason, setJitReason] = useState('Diagnóstico de cruce 3-Way');
@@ -82,13 +106,88 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
         ruc: newTenantRuc,
         plan_code: newTenantPlan,
       });
-      setTenants([...tenants, created]);
+      setTenants([created, ...tenants]);
       setShowNewTenant(false);
       setNewTenantName('');
       setNewTenantSlug('');
       setNewTenantRuc('');
+      setActionMessage(`Empresa "${created.name}" creada exitosamente con CMEK KMS.`);
     } catch (err: any) {
       alert(err.message || 'Error al crear tenant.');
+    }
+  };
+
+  const handleToggleTenantStatus = async (tenant: TenantSummary) => {
+    const nextStatus = tenant.status === 'active' ? 'suspended' : 'active';
+    const confirmMsg =
+      nextStatus === 'suspended'
+        ? `¿Desea suspender el acceso a "${tenant.name}"? Los proveedores no podrán emitir facturas.`
+        : `¿Desea reactivar la cuenta de "${tenant.name}"?`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      await client.updateTenantStatus(tenant.id, nextStatus);
+      setTenants(
+        tenants.map((t) => (t.id === tenant.id ? { ...t, status: nextStatus } : t))
+      );
+      setActionMessage(`Estado de "${tenant.name}" actualizado a ${nextStatus.toUpperCase()}.`);
+    } catch (err: any) {
+      alert(err.message || 'Error actualizando estado.');
+    }
+  };
+
+  const handleOpenRenewModal = (tenant: TenantSummary) => {
+    setRenewingTenant(tenant);
+    setRenewMonths(12);
+    setRenewNewPlanCode(tenant.plan_code || 'growth');
+  };
+
+  const handleRenewPlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!renewingTenant) return;
+
+    try {
+      const updated = await client.renewTenantPlan(renewingTenant.id, {
+        plan_code: renewNewPlanCode,
+        months_to_add: Number(renewMonths),
+      });
+      setTenants(tenants.map((t) => (t.id === renewingTenant.id ? updated : t)));
+      setRenewingTenant(null);
+      setActionMessage(`Plan renovado exitosamente para "${updated.name}". Nueva vigencia calculada.`);
+    } catch (err: any) {
+      alert(err.message || 'Error al renovar plan.');
+    }
+  };
+
+  const handleOpenEditPlan = (plan: CommercialPlan) => {
+    setEditingPlan(plan);
+    setEditPlanName(plan.name);
+    setEditPlanPrice(plan.price_pen || (plan.price_cents ? plan.price_cents / 100 : 0));
+    setEditPlanSuppliers(plan.max_suppliers);
+    setEditPlanInvoices(plan.max_monthly_invoices);
+    setEditPlanFeatures(plan.features || []);
+    setEditPlanActive(plan.is_active);
+  };
+
+  const handleSavePlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPlan) return;
+
+    try {
+      const updated = await client.updatePlan(editingPlan.code, {
+        name: editPlanName,
+        price_pen: Number(editPlanPrice),
+        max_suppliers: Number(editPlanSuppliers),
+        max_monthly_invoices: Number(editPlanInvoices),
+        features: editPlanFeatures,
+        is_active: editPlanActive,
+      });
+      setPlans(plans.map((p) => (p.code === editingPlan.code ? updated : p)));
+      setEditingPlan(null);
+      setActionMessage(`Plan "${updated.name}" actualizado. Los cambios ya alimentan la Landing Page.`);
+    } catch (err: any) {
+      alert(err.message || 'Error al guardar plan.');
     }
   };
 
@@ -106,383 +205,906 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
       });
       setJitSessions([created, ...jitSessions]);
       setShowNewJit(false);
+      setActionMessage(`Sesión JIT autorizada con TTL de ${jitHours} horas.`);
     } catch (err: any) {
       alert(err.message || 'Error al autorizar sesión JIT PAM.');
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24 text-slate-400">
-        <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mr-3" />
-        <span>Cargando consola SuperAdmin SaaS...</span>
-      </div>
-    );
-  }
+  // Helper para vigencia de plan
+  const getExpirationStatus = (expiresAtStr?: string) => {
+    if (!expiresAtStr) return { label: 'Sin fecha', color: 'bg-slate-100 text-slate-600' };
+    const expireDate = new Date(expiresAtStr);
+    const now = new Date();
+    const diffDays = Math.ceil((expireDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      return {
+        label: `Vencido (${Math.abs(diffDays)}d)`,
+        color: 'bg-rose-50 text-rose-700 border-rose-200',
+        dateStr: expireDate.toLocaleDateString('es-PE'),
+        isUrgent: true,
+      };
+    } else if (diffDays <= 30) {
+      return {
+        label: `Por vencer (${diffDays}d)`,
+        color: 'bg-amber-50 text-amber-700 border-amber-200',
+        dateStr: expireDate.toLocaleDateString('es-PE'),
+        isWarning: true,
+      };
+    }
+    return {
+      label: `Vigente (${diffDays}d)`,
+      color: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      dateStr: expireDate.toLocaleDateString('es-PE'),
+    };
+  };
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
-      {/* Top Banner */}
-      <div className="bg-slate-900 rounded-2xl p-6 border border-amber-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center flex-shrink-0">
-            <ShieldAlert className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-white tracking-tight">
-                Consola SuperAdmin SaaS Factumflux
-              </h1>
-              <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                Aislado / Root
+    <div className="flex h-screen bg-[#F8FAFC] text-[#0B2545] font-sans overflow-hidden selection:bg-[#E8F4F2] selection:text-[#0A7469]">
+      {/* ── SIDEBAR CORPORATIVO SUPERADMIN ─────────────────────────────────── */}
+      <aside className="w-64 bg-[#0B2545] text-white flex flex-col justify-between flex-shrink-0 z-20 shadow-xl">
+        <div>
+          {/* Logo Brand Mark */}
+          <div className="h-16 px-6 flex items-center gap-3 border-b border-white/10">
+            <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center text-[#0B2545] font-black text-lg shadow-sm">
+              F
+            </div>
+            <div>
+              <span className="font-bold text-lg tracking-tight block leading-tight">
+                Factum<span className="text-[#4FC9BE]">flux</span>
+              </span>
+              <span className="text-[10px] uppercase font-bold text-amber-300 tracking-wider flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-amber-400" /> SuperAdmin SaaS
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Administración central de tenants, cuotas de comprobantes, sesiones JIT y auditoría inmutable.
-              {stats && ` • ${stats.active_tenants} tenants activos en la red.`}
-            </p>
           </div>
+
+          {/* Navigation Links */}
+          <nav className="p-4 space-y-1 text-sm font-medium">
+            <button
+              onClick={() => setActiveTab('tenants')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
+                activeTab === 'tenants'
+                  ? 'bg-[#0A7469] text-white shadow-md'
+                  : 'text-white/75 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Building2 className="w-4 h-4 text-[#4FC9BE]" />
+                <span>Empresas / Tenants</span>
+              </div>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 font-mono">
+                {tenants.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('plans')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
+                activeTab === 'plans'
+                  ? 'bg-[#0A7469] text-white shadow-md'
+                  : 'text-white/75 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Layers className="w-4 h-4 text-[#4FC9BE]" />
+                <span>Planes Comerciales</span>
+              </div>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 font-mono">
+                {plans.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('jit')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
+                activeTab === 'jit'
+                  ? 'bg-[#0A7469] text-white shadow-md'
+                  : 'text-white/75 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Key className="w-4 h-4 text-amber-400" />
+                <span>Soporte JIT PAM</span>
+              </div>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 font-mono">
+                {jitSessions.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('audit')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
+                activeTab === 'audit'
+                  ? 'bg-[#0A7469] text-white shadow-md'
+                  : 'text-white/75 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Shield className="w-4 h-4 text-[#4FC9BE]" />
+                <span>Auditoría SHA-256</span>
+              </div>
+            </button>
+          </nav>
         </div>
 
-        <button
-          onClick={onExit}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Volver al Portal Cliente</span>
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
-        <button
-          onClick={() => setActiveTab('tenants')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-2 ${
-            activeTab === 'tenants'
-              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <Building2 className="w-4 h-4" />
-          <span>Tenants ({tenants.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('plans')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-2 ${
-            activeTab === 'plans'
-              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <Layers className="w-4 h-4" />
-          <span>Planes Comerciales</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('jit')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-2 ${
-            activeTab === 'jit'
-              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <Key className="w-4 h-4" />
-          <span>Sesiones JIT PAM ({jitSessions.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('audit')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-2 ${
-            activeTab === 'audit'
-              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <Shield className="w-4 h-4" />
-          <span>Auditoría SHA-256</span>
-        </button>
-      </div>
-
-      {/* TAB 1: Tenants */}
-      {activeTab === 'tenants' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-slate-400">Listado de empresas cliente suscritas a la red Factumflux:</span>
-            <button
-              onClick={() => setShowNewTenant(!showNewTenant)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 text-xs font-bold transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Registrar Tenant</span>
-            </button>
+        {/* Sidebar Footer */}
+        <div className="p-4 border-t border-white/10 space-y-3">
+          <div className="px-2 py-1.5 rounded-lg bg-white/5 border border-white/10">
+            <span className="text-[10px] text-white/50 block uppercase tracking-wider font-semibold">
+              Conectado como
+            </span>
+            <span className="text-xs font-mono font-bold text-white truncate block">
+              admin@rvainvest.net
+            </span>
           </div>
 
-          {showNewTenant && (
-            <form onSubmit={handleCreateTenant} className="p-4 rounded-xl bg-slate-900 border border-amber-500/30 text-xs space-y-3">
-              <h3 className="font-bold text-amber-300">Nuevo Tenant Corporativo</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <button
+            onClick={onExit}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-rose-300 hover:text-white hover:bg-rose-500/20 border border-rose-500/20 transition-colors"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Cerrar Sesión SuperAdmin</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* ── MAIN CONTENT AREA ──────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F8FAFC]">
+        {/* Top Header */}
+        <header className="h-16 px-8 border-b border-[#E2E7EE] bg-white flex items-center justify-between flex-shrink-0 z-10 shadow-sm">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 uppercase tracking-wider flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-amber-600" /> Plataforma Multi-Tenant
+            </span>
+            <span className="text-[#5B6B7F] text-xs">•</span>
+            <span className="text-xs text-[#5B6B7F]">
+              Google Cloud KMS CMEK & Neon RLS activo
+            </span>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <button
+              onClick={loadData}
+              className="p-2 rounded-lg text-[#5B6B7F] hover:text-[#0B2545] hover:bg-[#F8FAFC] border border-[#E2E7EE] transition-colors"
+              title="Recargar datos de plataforma"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </header>
+
+        {/* Action message banner */}
+        {actionMessage && (
+          <div className="px-8 py-2.5 bg-[#E8F4F2] border-b border-[#0A7469]/30 text-[#0A7469] text-xs font-medium flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-[#0A7469]" />
+              {actionMessage}
+            </span>
+            <button onClick={() => setActionMessage(null)} className="text-[#5B6B7F] hover:text-[#0B2545]">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Scrollable View Area */}
+        <main className="flex-1 overflow-y-auto p-8">
+          {/* ── TAB: EMPRESAS / TENANTS ───────────────────────────────────── */}
+          {activeTab === 'tenants' && (
+            <div className="space-y-6 max-w-7xl">
+              {/* Header con botón para nuevo tenant */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <label className="block text-slate-400 mb-1">Nombre Comercial</label>
-                  <input
-                    type="text"
-                    required
-                    value={newTenantName}
-                    onChange={(e) => setNewTenantName(e.target.value)}
-                    placeholder="Ej. Cencosud Perú"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
-                  />
+                  <h2 className="text-2xl font-bold text-[#0B2545] tracking-tight">
+                    Empresas Clientes (Tenants)
+                  </h2>
+                  <p className="text-sm text-[#5B6B7F] mt-1">
+                    Control de vigencia, suspensión/activación, monitoreo de usuarios y renovación de planes.
+                  </p>
                 </div>
-                <div>
-                  <label className="block text-slate-400 mb-1">Slug Identificador</label>
-                  <input
-                    type="text"
-                    required
-                    value={newTenantSlug}
-                    onChange={(e) => setNewTenantSlug(e.target.value)}
-                    placeholder="cencosud-peru"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
-                  />
+
+                <button
+                  onClick={() => setShowNewTenant(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-semibold text-xs transition-all shadow-sm self-start sm:self-auto"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Aprovisionar Nuevo Tenant</span>
+                </button>
+              </div>
+
+              {/* KPI Quick Cards */}
+              {stats && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-white p-4 rounded-xl border border-[#E2E7EE] shadow-sm">
+                    <span className="text-xs text-[#5B6B7F] block">Tenants Activos</span>
+                    <span className="text-2xl font-bold font-mono text-[#0B2545] mt-1 block">
+                      {stats.active_tenants}
+                    </span>
+                  </div>
+                  <div className="bg-white p-4 rounded-xl border border-[#E2E7EE] shadow-sm">
+                    <span className="text-xs text-[#5B6B7F] block">Proveedores Conectados</span>
+                    <span className="text-2xl font-bold font-mono text-[#0A7469] mt-1 block">
+                      {stats.total_suppliers}
+                    </span>
+                  </div>
+                  <div className="bg-white p-4 rounded-xl border border-[#E2E7EE] shadow-sm">
+                    <span className="text-xs text-[#5B6B7F] block">Facturas Procesadas</span>
+                    <span className="text-2xl font-bold font-mono text-[#0B2545] mt-1 block">
+                      {stats.total_monthly_invoices}
+                    </span>
+                  </div>
+                  <div className="bg-white p-4 rounded-xl border border-[#E2E7EE] shadow-sm">
+                    <span className="text-xs text-[#5B6B7F] block">Auto-Match Rate</span>
+                    <span className="text-2xl font-bold font-mono text-emerald-600 mt-1 block">
+                      {stats.auto_match_ratio.toFixed(1)}%
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-slate-400 mb-1">RUC (11 dígitos)</label>
-                  <input
-                    type="text"
-                    required
-                    maxLength={11}
-                    value={newTenantRuc}
-                    onChange={(e) => setNewTenantRuc(e.target.value)}
-                    placeholder="20100010724"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-400 mb-1">Plan</label>
-                  <select
-                    value={newTenantPlan}
-                    onChange={(e) => setNewTenantPlan(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
-                  >
-                    <option value="STARTUP">STARTUP</option>
-                    <option value="PRO">PRO</option>
-                    <option value="ENTERPRISE">ENTERPRISE</option>
-                  </select>
+              )}
+
+              {/* Tabla de Tenants */}
+              <div className="bg-white rounded-2xl border border-[#E2E7EE] overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-[#E2E7EE] bg-[#F8FAFC] text-[#5B6B7F] text-xs uppercase tracking-wider font-semibold">
+                        <th className="py-3.5 px-4">Empresa / RUC</th>
+                        <th className="py-3.5 px-4">Plan Actual</th>
+                        <th className="py-3.5 px-4">Usuarios Conectados</th>
+                        <th className="py-3.5 px-4">Vigencia del Plan</th>
+                        <th className="py-3.5 px-4">Estado</th>
+                        <th className="py-3.5 px-4 text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#E2E7EE]">
+                      {tenants.map((t) => {
+                        const expireInfo = getExpirationStatus(t.plan_expires_at);
+                        const isActive = t.status === 'active';
+
+                        return (
+                          <tr key={t.id} className="hover:bg-[#F8FAFC]/80 transition-colors">
+                            <td className="py-4 px-4">
+                              <span className="font-bold text-[#0B2545] block">{t.name}</span>
+                              <div className="flex items-center gap-2 mt-0.5 text-xs text-[#5B6B7F] font-mono">
+                                <span>RUC: {t.ruc}</span>
+                                <span>•</span>
+                                <span className="text-[10px] text-[#0A7469]">{t.slug}</span>
+                              </div>
+                            </td>
+
+                            <td className="py-4 px-4">
+                              <span className="font-bold text-[#0B2545] text-xs block">
+                                {t.plan_name || t.plan_code.toUpperCase()}
+                              </span>
+                              <span className="text-[11px] text-[#5B6B7F]">
+                                Cuota: {t.monthly_invoices_used || 0} / {t.max_monthly_invoices || '∞'} FE
+                              </span>
+                            </td>
+
+                            <td className="py-4 px-4 text-xs">
+                              <div className="flex items-center gap-1.5 text-[#0B2545] font-medium">
+                                <Users className="w-3.5 h-3.5 text-[#0A7469]" />
+                                <span>Cliente: <strong>{t.client_users_count || 1}</strong> analistas</span>
+                              </div>
+                              <span className="text-[11px] text-[#5B6B7F] block mt-0.5">
+                                Proveedores: <strong>{t.active_suppliers_count || 0}</strong> empresas ({t.supplier_users_count || 0} usuarios)
+                              </span>
+                            </td>
+
+                            <td className="py-4 px-4 text-xs">
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-semibold border ${expireInfo.color}`}>
+                                <Calendar className="w-3 h-3" />
+                                {expireInfo.label}
+                              </span>
+                              {expireInfo.dateStr && (
+                                <span className="block text-[10px] text-[#5B6B7F] font-mono mt-1">
+                                  Hasta: {expireInfo.dateStr}
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-4 px-4">
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                  isActive
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                }`}
+                              >
+                                {isActive ? (
+                                  <>
+                                    <CheckCircle2 className="w-3.5 h-3.5" /> Activo
+                                  </>
+                                ) : (
+                                  <>
+                                    <XCircle className="w-3.5 h-3.5" /> Suspendido
+                                  </>
+                                )}
+                              </span>
+                            </td>
+
+                            <td className="py-4 px-4 text-right space-x-2">
+                              {/* Toggle Activar/Desactivar */}
+                              <button
+                                onClick={() => handleToggleTenantStatus(t)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                                  isActive
+                                    ? 'bg-white hover:bg-rose-50 text-rose-600 border-rose-200'
+                                    : 'bg-white hover:bg-emerald-50 text-emerald-600 border-emerald-200'
+                                }`}
+                                title={isActive ? 'Suspender acceso a la cuenta' : 'Reactivar cuenta'}
+                              >
+                                {isActive ? 'Desactivar' : 'Activar'}
+                              </button>
+
+                              {/* Renovar Plan */}
+                              <button
+                                onClick={() => handleOpenRenewModal(t)}
+                                className="px-3 py-1 rounded-lg bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-semibold shadow-sm transition-colors"
+                              >
+                                Renovar Plan
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-              <div className="flex justify-end gap-2 pt-2">
+            </div>
+          )}
+
+          {/* ── TAB: PLANES COMERCIALES (EDITABLES) ───────────────────────── */}
+          {activeTab === 'plans' && (
+            <div className="space-y-6 max-w-6xl">
+              <div>
+                <h2 className="text-2xl font-bold text-[#0B2545] tracking-tight">
+                  Planes Comerciales SaaS
+                </h2>
+                <p className="text-sm text-[#5B6B7F] mt-1">
+                  Los precios, límites y características definidos aquí alimentan directamente la sección de Planes de la Landing Page.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {plans.map((p) => (
+                  <div
+                    key={p.code}
+                    className="bg-white rounded-2xl p-6 border border-[#E2E7EE] shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow relative"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-mono font-bold uppercase text-[#0A7469] bg-[#E8F4F2] px-2 py-0.5 rounded">
+                          {p.code}
+                        </span>
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                            p.is_active
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-slate-100 text-slate-500'
+                          }`}
+                        >
+                          {p.is_active ? 'Activo en Landing' : 'Oculto'}
+                        </span>
+                      </div>
+
+                      <h3 className="text-xl font-bold text-[#0B2545] mb-2">{p.name}</h3>
+
+                      <div className="mb-4">
+                        <span className="text-3xl font-extrabold font-mono text-[#0B2545]">
+                          S/ {p.price_pen || (p.price_cents ? p.price_cents / 100 : 0)}
+                        </span>
+                        <span className="text-xs text-[#5B6B7F]"> / mes</span>
+                      </div>
+
+                      <div className="space-y-2 text-xs text-[#5B6B7F] mb-6 border-y border-[#E2E7EE] py-3">
+                        <div className="flex justify-between">
+                          <span>Máx. Proveedores Activos:</span>
+                          <strong className="text-[#0B2545] font-mono">{p.max_suppliers}</strong>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Máx. Facturas Mensuales:</span>
+                          <strong className="text-[#0B2545] font-mono">{p.max_monthly_invoices}</strong>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5 text-xs text-[#5B6B7F] mb-6">
+                        <span className="font-semibold text-[#0B2545] block mb-2">Características:</span>
+                        {(p.features || []).map((feat, idx) => (
+                          <div key={idx} className="flex items-start gap-2">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-[#0A7469] flex-shrink-0 mt-0.5" />
+                            <span>{feat}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleOpenEditPlan(p)}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-[#0A7469] text-[#0A7469] hover:bg-[#E8F4F2] font-semibold text-xs transition-colors"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>Editar Plan y Precios</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── TAB: SOPORTE JIT PAM ──────────────────────────────────────── */}
+          {activeTab === 'jit' && (
+            <div className="space-y-6 max-w-6xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-[#0B2545] tracking-tight">
+                    Acceso Temporal JIT PAM (Just-In-Time)
+                  </h2>
+                  <p className="text-sm text-[#5B6B7F] mt-1">
+                    Elevación temporal de privilegios para soporte técnico con revocación automática y auditoría criptográfica.
+                  </p>
+                </div>
+
                 <button
-                  type="button"
-                  onClick={() => setShowNewTenant(false)}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400"
+                  onClick={() => setShowNewJit(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs transition-all shadow-sm"
                 >
-                  Cancelar
+                  <Key className="w-4 h-4" />
+                  <span>Emitir Sesión JIT</span>
                 </button>
+              </div>
+
+              {/* Tabla de Sesiones JIT */}
+              <div className="bg-white rounded-2xl border border-[#E2E7EE] overflow-hidden shadow-sm">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-[#E2E7EE] bg-[#F8FAFC] text-[#5B6B7F] uppercase tracking-wider font-semibold">
+                      <th className="py-3 px-4">Empresa Objetivo</th>
+                      <th className="py-3 px-4">Solicitante</th>
+                      <th className="py-3 px-4">Motivo de Soporte</th>
+                      <th className="py-3 px-4">Expiración (TTL)</th>
+                      <th className="py-3 px-4">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E2E7EE]">
+                    {jitSessions.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-12 text-center text-[#5B6B7F]">
+                          No hay sesiones JIT activas en este momento.
+                        </td>
+                      </tr>
+                    ) : (
+                      jitSessions.map((j) => (
+                        <tr key={j.id} className="hover:bg-[#F8FAFC]/80 transition-colors">
+                          <td className="py-3.5 px-4 font-bold text-[#0B2545]">
+                            {j.tenant_name || j.target_tenant_id}
+                          </td>
+                          <td className="py-3.5 px-4 font-mono text-[#5B6B7F]">{j.requester_email}</td>
+                          <td className="py-3.5 px-4 text-[#0B2545]">{j.reason}</td>
+                          <td className="py-3.5 px-4 font-mono text-[#5B6B7F]">{j.expires_at}</td>
+                          <td className="py-3.5 px-4">
+                            <span className="px-2 py-0.5 rounded-full font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                              {j.status.toUpperCase()}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── TAB: AUDITORÍA INMUTABLE SHA-256 ─────────────────────────── */}
+          {activeTab === 'audit' && (
+            <div className="space-y-6 max-w-6xl">
+              <div>
+                <h2 className="text-2xl font-bold text-[#0B2545] tracking-tight">
+                  Registro de Auditoría SHA-256
+                </h2>
+                <p className="text-sm text-[#5B6B7F] mt-1">
+                  Bitácora inmutable encadenada criptográficamente (prev_hash → current_hash) para peritaje fiscal y compliance.
+                </p>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-[#E2E7EE] overflow-hidden shadow-sm">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-[#E2E7EE] bg-[#F8FAFC] text-[#5B6B7F] uppercase tracking-wider font-semibold">
+                      <th className="py-3 px-4">Timestamp</th>
+                      <th className="py-3 px-4">Actor</th>
+                      <th className="py-3 px-4">Acción</th>
+                      <th className="py-3 px-4">Entidad</th>
+                      <th className="py-3 px-4">Hash SHA-256 Actual</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E2E7EE] font-mono">
+                    {auditLogs.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-12 text-center text-[#5B6B7F] font-sans">
+                          No se registran eventos de auditoría.
+                        </td>
+                      </tr>
+                    ) : (
+                      auditLogs.map((log) => (
+                        <tr key={log.id} className="hover:bg-[#F8FAFC]/80 transition-colors">
+                          <td className="py-3 px-4 text-[#5B6B7F]">{log.created_at}</td>
+                          <td className="py-3 px-4 font-sans font-medium text-[#0B2545]">{log.actor_email}</td>
+                          <td className="py-3 px-4 font-sans">
+                            <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold">
+                              {log.action}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-[#5B6B7F]">{log.entity_name}</td>
+                          <td className="py-3 px-4 font-mono text-[10px] text-[#0A7469]">
+                            {log.current_event_hash?.substring(0, 24)}...
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+
+      {/* ── MODAL: NUEVO TENANT ───────────────────────────────────────────── */}
+      {showNewTenant && (
+        <div className="fixed inset-0 bg-[#0B2545]/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white border border-[#E2E7EE] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-[#0B2545] flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-[#0A7469]" />
+                Aprovisionar Nueva Empresa (Tenant)
+              </h3>
+              <button onClick={() => setShowNewTenant(false)} className="text-[#5B6B7F] hover:text-[#0B2545]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateTenant} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-[#5B6B7F] font-semibold mb-1">Razón Social</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej. Corporación Minera del Centro S.A.C."
+                  value={newTenantName}
+                  onChange={(e) => setNewTenantName(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[#5B6B7F] font-semibold mb-1">RUC (11 dígitos)</label>
+                <input
+                  type="text"
+                  required
+                  maxLength={11}
+                  placeholder="20601234567"
+                  value={newTenantRuc}
+                  onChange={(e) => setNewTenantRuc(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[#5B6B7F] font-semibold mb-1">Slug Identificador</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="ej. minera-centro"
+                  value={newTenantSlug}
+                  onChange={(e) => setNewTenantSlug(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[#5B6B7F] font-semibold mb-1">Plan Comercial Contratado</label>
+                <select
+                  value={newTenantPlan}
+                  onChange={(e) => setNewTenantPlan(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
+                >
+                  {plans.map((p) => (
+                    <option key={p.code} value={p.code}>
+                      {p.name} - S/ {p.price_pen}/mes
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="pt-3">
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-amber-600 text-slate-950 font-bold"
+                  className="w-full py-2.5 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-bold transition-colors shadow-sm"
                 >
-                  Crear Tenant
+                  Aprovisionar en Neon & Cloud KMS
                 </button>
               </div>
             </form>
-          )}
-
-          <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden text-xs">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-slate-800 bg-slate-850/50 text-slate-400 uppercase">
-                  <th className="py-3 px-4">Empresa / Tenant</th>
-                  <th className="py-3 px-4">RUC</th>
-                  <th className="py-3 px-4">Plan</th>
-                  <th className="py-3 px-4">Estado</th>
-                  <th className="py-3 px-4">Consumo Mes</th>
-                  <th className="py-3 px-4">KMS / Storage</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60 text-slate-300">
-                {tenants.map((t) => (
-                  <tr key={t.id} className="hover:bg-slate-800/40">
-                    <td className="py-3 px-4">
-                      <strong className="text-white block">{t.name}</strong>
-                      <span className="text-[10px] text-slate-500 font-mono">{t.id}</span>
-                    </td>
-                    <td className="py-3 px-4 font-mono">{t.ruc}</td>
-                    <td className="py-3 px-4">
-                      <span className="px-2 py-0.5 rounded font-bold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                        {t.plan_code}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="text-emerald-400 font-semibold">{t.status}</span>
-                    </td>
-                    <td className="py-3 px-4">
-                      {t.monthly_invoices_used || 0} / {t.max_monthly_invoices || 'Ilimitado'} facturas
-                    </td>
-                    <td className="py-3 px-4 text-[10px] text-slate-400 font-mono">
-                      {t.storage_bucket || 'gs://factumflux-storage'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </div>
       )}
 
-      {/* TAB 2: Plans */}
-      {activeTab === 'plans' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {plans.map((p) => (
-            <div key={p.code} className="bg-slate-900 rounded-2xl p-5 border border-slate-800 space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-bold uppercase text-amber-400">{p.code}</span>
-                <span className="text-xl font-bold text-white">S/ {p.price_pen} / mes</span>
-              </div>
-              <h3 className="text-base font-bold text-white">{p.name}</h3>
-              <ul className="text-xs text-slate-400 space-y-1.5 pt-2">
-                <li>• Hasta {p.max_suppliers} proveedores activos</li>
-                <li>• Hasta {p.max_monthly_invoices} comprobantes / mes</li>
-                <li>• Validación SUNAT en tiempo real & 3-Way Match</li>
-              </ul>
+      {/* ── MODAL: RENOVAR PLAN DE TENANT ─────────────────────────────────── */}
+      {renewingTenant && (
+        <div className="fixed inset-0 bg-[#0B2545]/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white border border-[#E2E7EE] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-[#0B2545] flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-[#0A7469]" />
+                Renovar Plan de Suscripción
+              </h3>
+              <button onClick={() => setRenewingTenant(null)} className="text-[#5B6B7F] hover:text-[#0B2545]">
+                <X className="w-5 h-5" />
+              </button>
             </div>
-          ))}
+
+            <p className="text-xs text-[#5B6B7F]">
+              Empresa: <strong className="text-[#0B2545]">{renewingTenant.name}</strong> (RUC: {renewingTenant.ruc})
+            </p>
+
+            <form onSubmit={handleRenewPlan} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-[#5B6B7F] font-semibold mb-1">Plan Comercial</label>
+                <select
+                  value={renewNewPlanCode}
+                  onChange={(e) => setRenewNewPlanCode(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
+                >
+                  {plans.map((p) => (
+                    <option key={p.code} value={p.code}>
+                      {p.name} - S/ {p.price_pen}/mes ({p.max_suppliers} prov, {p.max_monthly_invoices} FE)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[#5B6B7F] font-semibold mb-1">Periodo de Renovación</label>
+                <select
+                  value={renewMonths}
+                  onChange={(e) => setRenewMonths(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
+                >
+                  <option value={12}>1 Año (+12 Meses)</option>
+                  <option value={24}>2 Años (+24 Meses)</option>
+                  <option value={6}>6 Meses</option>
+                  <option value={1}>1 Mes</option>
+                </select>
+              </div>
+
+              <div className="p-3 bg-[#E8F4F2] rounded-xl text-[11px] text-[#0A7469]">
+                La nueva fecha de expiración se calculará agregando el periodo a la vigencia actual.
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  className="w-full py-2.5 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-bold transition-colors shadow-sm"
+                >
+                  Confirmar Renovación
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
-      {/* TAB 3: JIT PAM Sessions */}
-      {activeTab === 'jit' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-slate-400">Sesiones temporales de soporte con privilegios elevados (JIT PAM):</span>
-            <button
-              onClick={() => setShowNewJit(!showNewJit)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 text-xs font-bold transition-colors"
-            >
-              <Key className="w-4 h-4" />
-              <span>Crear Sesión JIT</span>
-            </button>
-          </div>
+      {/* ── MODAL: EDITAR PLAN COMERCIAL ─────────────────────────────────── */}
+      {editingPlan && (
+        <div className="fixed inset-0 bg-[#0B2545]/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white border border-[#E2E7EE] rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-[#0B2545] flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-[#0A7469]" />
+                Editar Plan: {editingPlan.code.toUpperCase()}
+              </h3>
+              <button onClick={() => setEditingPlan(null)} className="text-[#5B6B7F] hover:text-[#0B2545]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-          {showNewJit && (
-            <form onSubmit={handleCreateJIT} className="p-4 rounded-xl bg-slate-900 border border-amber-500/30 text-xs space-y-3">
-              <h3 className="font-bold text-amber-300">Autorizar Sesión JIT Temporal</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <form onSubmit={handleSavePlan} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-[#5B6B7F] font-semibold mb-1">Nombre Comercial del Plan</label>
+                <input
+                  type="text"
+                  required
+                  value={editPlanName}
+                  onChange={(e) => setEditPlanName(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-slate-400 mb-1">Tenant Objetivo</label>
-                  <select
-                    value={jitTenantId}
-                    onChange={(e) => setJitTenantId(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
-                  >
-                    <option value="">Seleccione un tenant...</option>
-                    {tenants.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} ({t.ruc})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-400 mb-1">Motivo Justificado</label>
-                  <input
-                    type="text"
-                    value={jitReason}
-                    onChange={(e) => setJitReason(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-400 mb-1">Duración (Horas)</label>
+                  <label className="block text-[#5B6B7F] font-semibold mb-1">Precio Mensual (S/)</label>
                   <input
                     type="number"
-                    min={1}
-                    max={8}
-                    value={jitHours}
-                    onChange={(e) => setJitHours(parseInt(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                    step="0.01"
+                    required
+                    value={editPlanPrice}
+                    onChange={(e) => setEditPlanPrice(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#5B6B7F] font-semibold mb-1">Máx. Proveedores</label>
+                  <input
+                    type="number"
+                    required
+                    value={editPlanSuppliers}
+                    onChange={(e) => setEditPlanSuppliers(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#5B6B7F] font-semibold mb-1">Máx. Facturas/Mes</label>
+                  <input
+                    type="number"
+                    required
+                    value={editPlanInvoices}
+                    onChange={(e) => setEditPlanInvoices(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono"
                   />
                 </div>
               </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowNewJit(false)}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400"
-                >
-                  Cancelar
-                </button>
+
+              {/* Editor de Características (Features) */}
+              <div>
+                <label className="block text-[#5B6B7F] font-semibold mb-1">
+                  Características Visibles en la Landing Page
+                </label>
+                <div className="space-y-2 mb-2">
+                  {editPlanFeatures.map((feat, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={feat}
+                        onChange={(e) => {
+                          const updated = [...editPlanFeatures];
+                          updated[idx] = e.target.value;
+                          setEditPlanFeatures(updated);
+                        }}
+                        className="flex-1 px-3 py-1.5 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditPlanFeatures(editPlanFeatures.filter((_, i) => i !== idx));
+                        }}
+                        className="p-1.5 text-rose-500 hover:bg-rose-50 rounded"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Agregar nueva característica..."
+                    value={newFeatureText}
+                    onChange={(e) => setNewFeatureText(e.target.value)}
+                    className="flex-1 px-3 py-1.5 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (newFeatureText.trim()) {
+                        setEditPlanFeatures([...editPlanFeatures, newFeatureText.trim()]);
+                        setNewFeatureText('');
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-[#0B2545] text-white rounded-lg font-semibold hover:bg-[#07192F]"
+                  >
+                    Agregar
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="activePlanCheck"
+                  checked={editPlanActive}
+                  onChange={(e) => setEditPlanActive(e.target.checked)}
+                  className="rounded text-[#0A7469] focus:ring-[#0A7469]"
+                />
+                <label htmlFor="activePlanCheck" className="text-[#0B2545] cursor-pointer">
+                  Plan activo y visible públicamente en la Landing Page
+                </label>
+              </div>
+
+              <div className="pt-3 border-t border-[#E2E7EE]">
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-amber-600 text-slate-950 font-bold"
+                  className="w-full py-2.5 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-bold transition-colors shadow-sm"
                 >
-                  Emitir Token JIT
+                  Guardar Cambios y Actualizar Landing Page
                 </button>
               </div>
             </form>
-          )}
-
-          <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden text-xs">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-slate-800 bg-slate-850/50 text-slate-400 uppercase">
-                  <th className="py-3 px-4">Tenant</th>
-                  <th className="py-3 px-4">Solicitante</th>
-                  <th className="py-3 px-4">Motivo</th>
-                  <th className="py-3 px-4">Caducidad</th>
-                  <th className="py-3 px-4">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60 text-slate-300">
-                {jitSessions.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-800/40">
-                    <td className="py-3 px-4 font-bold text-white">{s.tenant_name || s.target_tenant_id}</td>
-                    <td className="py-3 px-4">{s.requester_email}</td>
-                    <td className="py-3 px-4">{s.reason}</td>
-                    <td className="py-3 px-4 font-mono">{s.expires_at}</td>
-                    <td className="py-3 px-4">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-300">
-                        {s.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </div>
       )}
 
-      {/* TAB 4: Immutable Audit Trail */}
-      {activeTab === 'audit' && (
-        <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden text-xs">
-          <div className="p-4 border-b border-slate-800">
-            <h3 className="font-bold text-white flex items-center gap-2">
-              <Shield className="w-4 h-4 text-emerald-400" />
-              Cadena Criptográfica Inmutable de Auditoría (SHA-256 Hash Chain)
-            </h3>
+      {/* ── MODAL: NUEVA SESIÓN JIT ───────────────────────────────────────── */}
+      {showNewJit && (
+        <div className="fixed inset-0 bg-[#0B2545]/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white border border-[#E2E7EE] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-[#0B2545] flex items-center gap-2">
+                <Key className="w-5 h-5 text-amber-500" />
+                Emitir Sesión Temporal JIT PAM
+              </h3>
+              <button onClick={() => setShowNewJit(false)} className="text-[#5B6B7F] hover:text-[#0B2545]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateJIT} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-[#5B6B7F] font-semibold mb-1">Empresa Objetivo</label>
+                <select
+                  value={jitTenantId}
+                  onChange={(e) => setJitTenantId(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
+                >
+                  <option value="">Seleccione un tenant...</option>
+                  {tenants.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} (RUC: {t.ruc})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[#5B6B7F] font-semibold mb-1">Motivo de Soporte</label>
+                <input
+                  type="text"
+                  required
+                  value={jitReason}
+                  onChange={(e) => setJitReason(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[#5B6B7F] font-semibold mb-1">Duración (Horas de Expiración)</label>
+                <select
+                  value={jitHours}
+                  onChange={(e) => setJitHours(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
+                >
+                  <option value={1}>1 Hora</option>
+                  <option value={2}>2 Horas (Recomendado)</option>
+                  <option value={4}>4 Horas</option>
+                  <option value={8}>8 Horas</option>
+                </select>
+              </div>
+
+              <div className="pt-3">
+                <button
+                  type="submit"
+                  className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold transition-colors shadow-sm"
+                >
+                  Autorizar y Firmar Evento Criptográfico
+                </button>
+              </div>
+            </form>
           </div>
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-slate-800 bg-slate-850/50 text-slate-400 uppercase">
-                <th className="py-3 px-4">ID</th>
-                <th className="py-3 px-4">Actor</th>
-                <th className="py-3 px-4">Acción</th>
-                <th className="py-3 px-4">Entidad</th>
-                <th className="py-3 px-4">Hash Actual (Digest)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60 text-slate-300 font-mono text-[11px]">
-              {auditLogs.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-800/40">
-                  <td className="py-3 px-4">#{log.id}</td>
-                  <td className="py-3 px-4 text-indigo-300">{log.actor_email}</td>
-                  <td className="py-3 px-4 font-bold text-white">{log.action}</td>
-                  <td className="py-3 px-4">{log.entity_name} ({log.entity_id.slice(0, 8)}...)</td>
-                  <td className="py-3 px-4 text-emerald-400">{log.current_event_hash?.slice(0, 16)}...</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       )}
     </div>
