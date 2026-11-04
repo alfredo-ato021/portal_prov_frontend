@@ -211,6 +211,7 @@ export default function App() {
   if (authMode === 'superadmin_login') {
     return (
       <SuperAdminLoginScreen
+        client={client}
         onLogin={handleSuperAdminLogin}
         onBackToClientLogin={() => setAuthMode('client_login')}
       />

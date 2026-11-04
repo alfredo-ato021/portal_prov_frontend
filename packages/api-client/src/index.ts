@@ -391,6 +391,13 @@ export class FactumfluxClient {
   }
 
   // SuperAdmin endpoints
+  async superAdminLogin(email: string, password: string): Promise<{ token: string; user: any }> {
+    return this.fetch('/api/admin/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  }
+
   async getSuperAdminStats(): Promise<PlatformStats> {
     return this.fetch('/api/admin/stats');
   }
