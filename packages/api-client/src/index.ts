@@ -50,6 +50,61 @@ export interface TenantPolicy {
   updated_at?: string;
 }
 
+export interface FactoringQuote {
+  invoice_amount: number;
+  days_until_due: number;
+  monthly_rate_pct: number;
+  discount_fee: number;
+  platform_fee: number;
+  estimated_net_advance: number;
+  financier_name: string;
+}
+
+export interface FactoringOperation {
+  id: string;
+  tenant_id: string;
+  invoice_id: string;
+  supplier_id: string;
+  requested_amount: number;
+  currency: string;
+  discount_rate_pct: number;
+  estimated_net_advance: number;
+  financier_name: string;
+  status: 'REQUESTED' | 'OFFER_ACCEPTED' | 'CAVALI_REGISTERED' | 'TRANSFERRED' | 'DISBURSED' | 'REJECTED';
+  cavali_batch_id?: string;
+  cavali_annotation_code?: string;
+  disbursed_at?: string;
+  rejection_reason?: string;
+  series?: string;
+  number?: string;
+  supplier_name?: string;
+  due_date?: string;
+  is_credit?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupplierRankingItem {
+  tenant_id: string;
+  supplier_id: string;
+  overall_score: number;
+  tier: 'A+' | 'A' | 'B' | 'C' | 'D';
+  total_invoices: number;
+  auto_match_rate_pct: number;
+  avg_processing_days: number;
+  sunat_compliance_score: number;
+  delivery_punctuality_score: number;
+  last_calculated_at: string;
+  ruc: string;
+  legal_name: string;
+  sunat_status: string;
+  sunat_condition: string;
+}
+
+export interface WhatsAppSimulationResponse {
+  response_text: string;
+}
+
 export interface CommercialPlan {
   code: string;
   name: string;
@@ -81,6 +136,7 @@ export interface CreateTenantRequest {
 
 export interface InvoiceSummary {
   id: string;
+  supplier_id?: string;
   series: string;
   number: string;
   document_type: string;
@@ -407,6 +463,55 @@ export class FactumfluxClient {
     return this.fetch('/api/v1/backoffice/policies', {
       method: 'PUT',
       body: JSON.stringify(policy),
+    });
+  }
+
+  // Phase 5: Factoring, CAVALI & Supplier Liquidity
+  async getFactoringQuote(amount: number, days?: number): Promise<FactoringQuote> {
+    const query = days ? `?amount=${amount}&days=${days}` : `?amount=${amount}`;
+    return this.fetch(`/api/v1/supplier/factoring/quote${query}`);
+  }
+
+  async requestFactoring(input: { invoice_id: string; supplier_id: string; financier_name?: string }): Promise<FactoringOperation> {
+    return this.fetch('/api/v1/supplier/factoring/requests', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async listFactoringOperations(supplierId?: string): Promise<FactoringOperation[]> {
+    const query = supplierId ? `?supplier_id=${supplierId}` : '';
+    return this.fetch(`/api/v1/backoffice/factoring/operations${query}`);
+  }
+
+  async registerCavaliAnnotation(operationId: string): Promise<FactoringOperation> {
+    return this.fetch(`/api/v1/backoffice/factoring/${operationId}/cavali`, {
+      method: 'POST',
+    });
+  }
+
+  async disburseFactoring(operationId: string): Promise<FactoringOperation> {
+    return this.fetch(`/api/v1/backoffice/factoring/${operationId}/disburse`, {
+      method: 'POST',
+    });
+  }
+
+  // Phase 5: Supplier Reliability Scoring & Ranking
+  async listSupplierRankings(): Promise<SupplierRankingItem[]> {
+    return this.fetch('/api/v1/backoffice/suppliers/rankings');
+  }
+
+  async recalculateSupplierScore(supplierId: string): Promise<SupplierRankingItem> {
+    return this.fetch(`/api/v1/backoffice/suppliers/${supplierId}/recalculate-score`, {
+      method: 'POST',
+    });
+  }
+
+  // Phase 5: WhatsApp Self-Service Bot Simulator
+  async simulateWhatsApp(phoneNumber: string, message: string): Promise<WhatsAppSimulationResponse> {
+    return this.fetch('/api/v1/whatsapp/simulate', {
+      method: 'POST',
+      body: JSON.stringify({ phone_number: phoneNumber, message }),
     });
   }
 }

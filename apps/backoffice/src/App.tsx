@@ -22,6 +22,9 @@ import {
   Calendar,
   Sliders,
   FileCode,
+  Coins,
+  Award,
+  Send,
 } from 'lucide-react';
 import { StatusChip } from '@factumflux/ui';
 import {
@@ -36,6 +39,8 @@ import {
   CommercialPlan,
   JITSupportSession,
   AuditEvent,
+  FactoringOperation,
+  SupplierRankingItem,
 } from '@factumflux/api-client';
 import { t, formatCurrency, formatDate } from '@factumflux/i18n';
 
@@ -45,6 +50,8 @@ type ActiveView =
   | 'tenant_sire'
   | 'tenant_alerts'
   | 'tenant_policies'
+  | 'tenant_factoring'
+  | 'tenant_scoring'
   | 'superadmin_tenants'
   | 'superadmin_jit'
   | 'superadmin_audit'
@@ -80,6 +87,13 @@ export default function App() {
   // Matching Policies state
   const [policy, setPolicy] = useState<TenantPolicy | null>(null);
   const [isSavingPolicy, setIsSavingPolicy] = useState(false);
+
+  // Phase 5: Factoring & Scoring states
+  const [factoringOps, setFactoringOps] = useState<FactoringOperation[]>([]);
+  const [rankings, setRankings] = useState<SupplierRankingItem[]>([]);
+  const [isProcessingCavali, setIsProcessingCavali] = useState<string | null>(null);
+  const [isProcessingDisburse, setIsProcessingDisburse] = useState<string | null>(null);
+  const [isRecalculatingScore, setIsRecalculatingScore] = useState<string | null>(null);
 
   // SuperAdmin states
   const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
@@ -126,6 +140,12 @@ export default function App() {
       } else if (activeView === 'tenant_policies') {
         const data = await client.getTenantPolicy();
         setPolicy(data);
+      } else if (activeView === 'tenant_factoring') {
+        const data = await client.listFactoringOperations();
+        setFactoringOps(data);
+      } else if (activeView === 'tenant_scoring') {
+        const data = await client.listSupplierRankings();
+        setRankings(data);
       } else if (activeView === 'superadmin_tenants') {
         const [statsData, tenantsData, plansData] = await Promise.all([
           client.getPlatformStats().catch(() => null),
@@ -303,6 +323,51 @@ export default function App() {
     }
   };
 
+  const handleRegisterCavali = async (operationId: string) => {
+    setIsProcessingCavali(operationId);
+    setActionMessage(null);
+    setError(null);
+    try {
+      const updated = await client.registerCavaliAnnotation(operationId);
+      setActionMessage(`CAVALI ICLV: Operación anotada en cuenta exitosamente (Lote: ${updated.cavali_batch_id}, Código: ${updated.cavali_annotation_code}).`);
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || 'Error registrando anotación en cuenta CAVALI');
+    } finally {
+      setIsProcessingCavali(null);
+    }
+  };
+
+  const handleDisburse = async (operationId: string) => {
+    setIsProcessingDisburse(operationId);
+    setActionMessage(null);
+    setError(null);
+    try {
+      await client.disburseFactoring(operationId);
+      setActionMessage('Factoring: Desembolso confirmado y transferido a la cuenta interbancaria (CCI) del proveedor.');
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || 'Error confirmando desembolso');
+    } finally {
+      setIsProcessingDisburse(null);
+    }
+  };
+
+  const handleRecalculateScore = async (supplierId: string) => {
+    setIsRecalculatingScore(supplierId);
+    setActionMessage(null);
+    setError(null);
+    try {
+      const res = await client.recalculateSupplierScore(supplierId);
+      setActionMessage(`Scoring: Score recalculado para ${res.legal_name}: ${res.overall_score}/100 (Tier ${res.tier}). Auto-match: ${res.auto_match_rate_pct}%.`);
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || 'Error recalculando confiabilidad del proveedor');
+    } finally {
+      setIsRecalculatingScore(null);
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, [activeView]);
@@ -414,6 +479,28 @@ export default function App() {
               >
                 <Sliders className="w-3.5 h-3.5 text-[#0A7469]" />
                 Políticas de Cuadre (CEL)
+              </button>
+              <button
+                onClick={() => setActiveView('tenant_factoring')}
+                className={`px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${
+                  activeView === 'tenant_factoring'
+                    ? 'bg-white shadow-xs text-[#0B2545] font-semibold'
+                    : 'text-[var(--muted-foreground)] hover:text-[#0B2545]'
+                }`}
+              >
+                <Coins className="w-3.5 h-3.5 text-[#0A7469]" />
+                Factoring & CAVALI
+              </button>
+              <button
+                onClick={() => setActiveView('tenant_scoring')}
+                className={`px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${
+                  activeView === 'tenant_scoring'
+                    ? 'bg-white shadow-xs text-[#0B2545] font-semibold'
+                    : 'text-[var(--muted-foreground)] hover:text-[#0B2545]'
+                }`}
+              >
+                <Award className="w-3.5 h-3.5 text-[#0A7469]" />
+                Scoring Proveedores
               </button>
               <button
                 onClick={() => setActiveView('superadmin_tenants')}
@@ -1367,6 +1454,371 @@ export default function App() {
                   Cancelar
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* VIEW: FACTORING Y CAVALI ICLV */}
+        {activeView === 'tenant_factoring' && (
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div>
+                <h1 className="text-2xl font-bold text-[#0B2545]">Factoring y Cesión de Créditos (CAVALI ICLV)</h1>
+                <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                  Gestión de títulos valor de comprobantes al crédito aprobados, registro de anotación en cuenta CAVALI y confirmación de desembolsos de liquidez.
+                </p>
+              </div>
+              <button
+                onClick={loadData}
+                disabled={loading}
+                className="px-3 py-1.5 bg-white border border-[var(--border)] rounded text-xs font-medium hover:bg-[var(--muted)] flex items-center gap-1.5 self-start"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Actualizar
+              </button>
+            </div>
+
+            {/* Factoring KPI cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <div className="bg-white border border-[var(--border)] rounded-xl p-4 shadow-xs">
+                <span className="text-[11px] uppercase font-bold text-[var(--muted-foreground)] block mb-1">
+                  Operaciones Totales
+                </span>
+                <span className="text-2xl font-black font-mono text-[#0B2545]">
+                  {factoringOps.length}
+                </span>
+                <span className="text-[10px] text-[var(--muted-foreground)] block mt-0.5">
+                  Solicitudes de anticipo
+                </span>
+              </div>
+              <div className="bg-white border border-[var(--border)] rounded-xl p-4 shadow-xs">
+                <span className="text-[11px] uppercase font-bold text-[var(--muted-foreground)] block mb-1">
+                  Total Anticipado
+                </span>
+                <span className="text-2xl font-black font-mono text-[#0A7469]">
+                  {formatCurrency(
+                    factoringOps.reduce((acc, curr) => acc + (curr.estimated_net_advance || 0), 0),
+                    'PEN'
+                  )}
+                </span>
+                <span className="text-[10px] text-emerald-600 block mt-0.5">
+                  Liquidez colocada a proveedores
+                </span>
+              </div>
+              <div className="bg-white border border-[var(--border)] rounded-xl p-4 shadow-xs">
+                <span className="text-[11px] uppercase font-bold text-[var(--muted-foreground)] block mb-1">
+                  Tasa Mensual Promedio
+                </span>
+                <span className="text-2xl font-black font-mono text-indigo-700">
+                  1.85%
+                </span>
+                <span className="text-[10px] text-[var(--muted-foreground)] block mt-0.5">
+                  Descuento nominal mensual
+                </span>
+              </div>
+              <div className="bg-white border border-[var(--border)] rounded-xl p-4 shadow-xs">
+                <span className="text-[11px] uppercase font-bold text-[var(--muted-foreground)] block mb-1">
+                  Anotadas en CAVALI
+                </span>
+                <span className="text-2xl font-black font-mono text-amber-600">
+                  {factoringOps.filter(o => o.status === 'CAVALI_REGISTERED' || o.status === 'DISBURSED').length}
+                </span>
+                <span className="text-[10px] text-amber-600 block mt-0.5">
+                  Con mérito ejecutivo ICLV
+                </span>
+              </div>
+            </div>
+
+            {/* Factoring operations table */}
+            <div className="bg-white border border-[var(--border)] rounded-xl shadow-xs overflow-hidden">
+              <div className="p-4 border-b border-[var(--border)] bg-[var(--muted)]/40 flex items-center justify-between">
+                <span className="font-semibold text-xs text-[#0B2545] uppercase tracking-wider">
+                  Listado de Operaciones de Factoring
+                </span>
+                <span className="text-xs text-[var(--muted-foreground)] font-mono">
+                  {factoringOps.length} registros
+                </span>
+              </div>
+
+              {factoringOps.length === 0 ? (
+                <div className="p-12 text-center text-[var(--muted-foreground)] text-sm">
+                  <Coins className="w-10 h-10 text-[var(--muted-foreground)]/40 mx-auto mb-3" />
+                  <p className="font-medium text-[var(--foreground)]">No hay operaciones de factoring registradas</p>
+                  <p className="text-xs mt-1">Los proveedores pueden solicitar anticipos de sus facturas aprobadas desde su portal con un clic.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-[var(--border)] bg-[var(--muted)]/50 text-[var(--muted-foreground)] uppercase font-semibold">
+                        <th className="py-3 px-4">Comprobante</th>
+                        <th className="py-3 px-4">Proveedor</th>
+                        <th className="py-3 px-4 text-right">Importe Factura</th>
+                        <th className="py-3 px-4 text-right">Tasa Descuento</th>
+                        <th className="py-3 px-4 text-right">Anticipo Neto Estimado</th>
+                        <th className="py-3 px-4">Entidad Financiera</th>
+                        <th className="py-3 px-4 text-center">Estado</th>
+                        <th className="py-3 px-4">Anotación CAVALI</th>
+                        <th className="py-3 px-4 text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--border)]">
+                      {factoringOps.map((op) => (
+                        <tr key={op.id} className="hover:bg-[var(--muted)]/30 transition-colors">
+                          <td className="py-3 px-4 font-mono font-medium">
+                            {op.series ? `${op.series}-${op.number}` : op.invoice_id.substring(0, 8)}
+                          </td>
+                          <td className="py-3 px-4 font-medium text-[var(--foreground)]">
+                            {op.supplier_name || 'Proveedor Registrado'}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-semibold">
+                            {formatCurrency(op.requested_amount, op.currency)}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono text-indigo-700">
+                            {op.discount_rate_pct}% mes
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-bold text-[#0A7469]">
+                            {formatCurrency(op.estimated_net_advance, op.currency)}
+                          </td>
+                          <td className="py-3 px-4 text-[var(--muted-foreground)]">
+                            {op.financier_name}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold ${
+                              op.status === 'DISBURSED' ? 'bg-emerald-100 text-emerald-800' :
+                              op.status === 'CAVALI_REGISTERED' ? 'bg-blue-100 text-blue-800' :
+                              op.status === 'REJECTED' ? 'bg-rose-100 text-rose-800' :
+                              'bg-amber-100 text-amber-800'
+                            }`}>
+                              {op.status === 'REQUESTED' ? 'SOLICITADO' :
+                               op.status === 'CAVALI_REGISTERED' ? 'ANOTADO CAVALI' :
+                               op.status === 'DISBURSED' ? 'DESEMBOLSADO' : op.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-mono text-[11px] text-[var(--muted-foreground)]">
+                            {op.cavali_annotation_code ? (
+                              <div>
+                                <span className="font-semibold text-blue-700">{op.cavali_annotation_code}</span>
+                                <span className="block text-[10px] text-[var(--muted-foreground)]">{op.cavali_batch_id}</span>
+                              </div>
+                            ) : (
+                              <span className="text-[var(--muted-foreground)]/50 italic">Pendiente de anotación</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              {op.status === 'REQUESTED' && (
+                                <button
+                                  onClick={() => handleRegisterCavali(op.id)}
+                                  disabled={isProcessingCavali === op.id}
+                                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[11px] font-medium shadow-xs disabled:opacity-50 flex items-center gap-1"
+                                >
+                                  {isProcessingCavali === op.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                                  Anotar CAVALI
+                                </button>
+                              )}
+                              {op.status === 'CAVALI_REGISTERED' && (
+                                <button
+                                  onClick={() => handleDisburse(op.id)}
+                                  disabled={isProcessingDisburse === op.id}
+                                  className="px-2.5 py-1 bg-[#0A7469] hover:bg-[#075A52] text-white rounded text-[11px] font-medium shadow-xs disabled:opacity-50 flex items-center gap-1"
+                                >
+                                  {isProcessingDisburse === op.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Coins className="w-3 h-3" />}
+                                  Confirmar Pago
+                                </button>
+                              )}
+                              {op.status === 'DISBURSED' && (
+                                <span className="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> Liquidado
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* VIEW: SCORING Y ANALÍTICA DE PROVEEDORES */}
+        {activeView === 'tenant_scoring' && (
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div>
+                <h1 className="text-2xl font-bold text-[#0B2545]">Scoring y Analítica de Confiabilidad de Proveedores</h1>
+                <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                  Índice integral de confiabilidad operativa basado en cumplimiento tributario SUNAT, tasa de auto-match 3-way, tiempos de atención y puntualidad de entrega.
+                </p>
+              </div>
+              <button
+                onClick={loadData}
+                disabled={loading}
+                className="px-3 py-1.5 bg-white border border-[var(--border)] rounded text-xs font-medium hover:bg-[var(--muted)] flex items-center gap-1.5 self-start"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Actualizar
+              </button>
+            </div>
+
+            {/* Scoring KPI cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <div className="bg-white border border-[var(--border)] rounded-xl p-4 shadow-xs">
+                <span className="text-[11px] uppercase font-bold text-[var(--muted-foreground)] block mb-1">
+                  Proveedores Calificados
+                </span>
+                <span className="text-2xl font-black font-mono text-[#0B2545]">
+                  {rankings.length}
+                </span>
+                <span className="text-[10px] text-[var(--muted-foreground)] block mt-0.5">
+                  Con métricas en Neon DB
+                </span>
+              </div>
+              <div className="bg-white border border-[var(--border)] rounded-xl p-4 shadow-xs">
+                <span className="text-[11px] uppercase font-bold text-[var(--muted-foreground)] block mb-1">
+                  Tier A+ / A (Líderes)
+                </span>
+                <span className="text-2xl font-black font-mono text-[#0A7469]">
+                  {rankings.filter(r => r.tier === 'A+' || r.tier === 'A').length}
+                </span>
+                <span className="text-[10px] text-emerald-600 block mt-0.5">
+                  Proveedores estratégicos recomendados
+                </span>
+              </div>
+              <div className="bg-white border border-[var(--border)] rounded-xl p-4 shadow-xs">
+                <span className="text-[11px] uppercase font-bold text-[var(--muted-foreground)] block mb-1">
+                  Auto-Match Promedio
+                </span>
+                <span className="text-2xl font-black font-mono text-indigo-700">
+                  {rankings.length > 0
+                    ? Math.round((rankings.reduce((acc, curr) => acc + (curr.auto_match_rate_pct || 0), 0) / rankings.length) * 10) / 10
+                    : 100}%
+                </span>
+                <span className="text-[10px] text-[var(--muted-foreground)] block mt-0.5">
+                  Eficacia de cuadre 3-Way
+                </span>
+              </div>
+              <div className="bg-white border border-[var(--border)] rounded-xl p-4 shadow-xs">
+                <span className="text-[11px] uppercase font-bold text-[var(--muted-foreground)] block mb-1">
+                  Cumplimiento Fiscal SUNAT
+                </span>
+                <span className="text-2xl font-black font-mono text-emerald-700">
+                  {rankings.filter(r => r.sunat_status === 'ACTIVO' && r.sunat_condition === 'HABIDO').length} / {rankings.length || 1}
+                </span>
+                <span className="text-[10px] text-emerald-600 block mt-0.5">
+                  Condición Activo & Habido
+                </span>
+              </div>
+            </div>
+
+            {/* Leaderboard Table */}
+            <div className="bg-white border border-[var(--border)] rounded-xl shadow-xs overflow-hidden">
+              <div className="p-4 border-b border-[var(--border)] bg-[var(--muted)]/40 flex items-center justify-between">
+                <span className="font-semibold text-xs text-[#0B2545] uppercase tracking-wider">
+                  Ranking de Confiabilidad y Desempeño
+                </span>
+                <span className="text-xs text-[var(--muted-foreground)] font-mono">
+                  Ordenado por Score General
+                </span>
+              </div>
+
+              {rankings.length === 0 ? (
+                <div className="p-12 text-center text-[var(--muted-foreground)] text-sm">
+                  <Award className="w-10 h-10 text-[var(--muted-foreground)]/40 mx-auto mb-3" />
+                  <p className="font-medium text-[var(--foreground)]">No hay métricas de scoring calculadas aún</p>
+                  <p className="text-xs mt-1">El scoring se calcula automáticamente al procesar comprobantes y conciliar órdenes de compra.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-[var(--border)] bg-[var(--muted)]/50 text-[var(--muted-foreground)] uppercase font-semibold">
+                        <th className="py-3 px-4 text-center">Posición</th>
+                        <th className="py-3 px-4">Proveedor</th>
+                        <th className="py-3 px-4">RUC</th>
+                        <th className="py-3 px-4">Score de Confiabilidad</th>
+                        <th className="py-3 px-4 text-center">Tier</th>
+                        <th className="py-3 px-4 text-right">Facturas Totales</th>
+                        <th className="py-3 px-4 text-right">Auto-Match %</th>
+                        <th className="py-3 px-4 text-right">Días Promedio</th>
+                        <th className="py-3 px-4 text-center">Condición SUNAT</th>
+                        <th className="py-3 px-4 text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--border)]">
+                      {rankings.map((r, idx) => (
+                        <tr key={r.supplier_id} className="hover:bg-[var(--muted)]/30 transition-colors">
+                          <td className="py-3 px-4 text-center font-bold text-sm text-[var(--muted-foreground)] font-mono">
+                            #{idx + 1}
+                          </td>
+                          <td className="py-3 px-4 font-semibold text-[#0B2545]">
+                            {r.legal_name}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-[var(--muted-foreground)]">
+                            {r.ruc}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-sm text-[#0B2545] w-7">
+                                {r.overall_score}
+                              </span>
+                              <div className="w-24 bg-gray-200 h-2 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${
+                                    r.overall_score >= 90 ? 'bg-emerald-500' :
+                                    r.overall_score >= 75 ? 'bg-[#0A7469]' :
+                                    r.overall_score >= 60 ? 'bg-blue-500' :
+                                    r.overall_score >= 50 ? 'bg-amber-500' : 'bg-rose-500'
+                                  }`}
+                                  style={{ width: `${r.overall_score}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] text-[var(--muted-foreground)]">/100</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className={`inline-block px-2.5 py-0.5 rounded-full font-black text-xs ${
+                              r.tier === 'A+' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
+                              r.tier === 'A' ? 'bg-teal-100 text-teal-800 border border-teal-300' :
+                              r.tier === 'B' ? 'bg-blue-100 text-blue-800 border border-blue-300' :
+                              r.tier === 'C' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                              'bg-rose-100 text-rose-800 border border-rose-300'
+                            }`}>
+                              Tier {r.tier}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-medium">
+                            {r.total_invoices}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-bold text-[#0A7469]">
+                            {r.auto_match_rate_pct}%
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono text-[var(--muted-foreground)]">
+                            {r.avg_processing_days} d
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className="inline-block px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-semibold rounded border border-emerald-200">
+                              {r.sunat_status} / {r.sunat_condition}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <button
+                              onClick={() => handleRecalculateScore(r.supplier_id)}
+                              disabled={isRecalculatingScore === r.supplier_id}
+                              className="px-2 py-1 bg-white border border-[var(--border)] hover:bg-[var(--muted)] text-[var(--muted-foreground)] rounded text-[11px] font-medium shadow-xs disabled:opacity-50 inline-flex items-center gap-1"
+                              title="Recalcular métricas en base al historial completo"
+                            >
+                              <RefreshCw className={`w-3 h-3 ${isRecalculatingScore === r.supplier_id ? 'animate-spin' : ''}`} />
+                              Recalcular
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}
