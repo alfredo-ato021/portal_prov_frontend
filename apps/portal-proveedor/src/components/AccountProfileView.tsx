@@ -64,7 +64,6 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
       setContacts(data.contacts || []);
       setBankAccounts(data.bank_accounts || []);
     } catch {
-      // Fallback defaults
       setProfile({
         id: 'sup-demo-01',
         ruc: '20601234567',
@@ -293,8 +292,8 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20 text-slate-400">
-        <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-3" />
+      <div className="flex items-center justify-center py-20 text-[#5B6B7F]">
+        <div className="w-6 h-6 border-2 border-[#0A7469] border-t-transparent rounded-full animate-spin mr-3" />
         <span>Cargando datos del perfil...</span>
       </div>
     );
@@ -304,56 +303,56 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Title */}
       <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-          <UserCog className="w-6 h-6 text-indigo-400" />
+        <h1 className="text-2xl font-bold text-[#0B2545] tracking-tight flex items-center gap-2">
+          <UserCog className="w-6 h-6 text-[#0A7469]" />
           Datos de la Cuenta y Configuración
         </h1>
-        <p className="text-sm text-slate-400 mt-1">
+        <p className="text-sm text-[#5B6B7F] mt-1">
           Administra los datos de tu empresa, correos de notificación de pago, personas de contacto y cuentas bancarias.
         </p>
       </div>
 
       {saveSuccess && (
-        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm flex items-center gap-2 animate-fadeIn">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+        <div className="p-4 rounded-xl bg-[#E7F5EC] border border-[#176B3F]/30 text-[#176B3F] text-sm flex items-center gap-2 animate-fadeIn">
+          <CheckCircle2 className="w-5 h-5 text-[#176B3F]" />
           <span>{saveSuccess}</span>
         </div>
       )}
 
       {/* 1. Datos Generales de la Empresa */}
-      <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 space-y-4">
-        <h2 className="text-base font-bold text-white flex items-center gap-2">
-          <Building2 className="w-5 h-5 text-indigo-400" />
+      <div className="bg-white rounded-2xl p-6 border border-[#E2E7EE] shadow-sm space-y-4">
+        <h2 className="text-base font-bold text-[#0B2545] flex items-center gap-2">
+          <Building2 className="w-5 h-5 text-[#0A7469]" />
           Información Tributaria de la Empresa
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs pt-1">
-          <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-750">
-            <span className="text-slate-400 block mb-1">RUC</span>
-            <strong className="text-white text-sm font-mono">{profile?.ruc || '20601234567'}</strong>
+          <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-[#E2E7EE]">
+            <span className="text-[#5B6B7F] block mb-1">RUC</span>
+            <strong className="text-[#0B2545] text-sm font-mono">{profile?.ruc || '20601234567'}</strong>
           </div>
-          <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-750 sm:col-span-2">
-            <span className="text-slate-400 block mb-1">Razón Social</span>
-            <strong className="text-white text-sm">
+          <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-[#E2E7EE] sm:col-span-2">
+            <span className="text-[#5B6B7F] block mb-1">Razón Social</span>
+            <strong className="text-[#0B2545] text-sm">
               {profile?.legal_name || 'Distribuidora de Alimentos del Sur S.A.C.'}
             </strong>
           </div>
-          <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-750">
-            <span className="text-slate-400 block mb-1">Estado SUNAT</span>
-            <span className="inline-flex items-center gap-1 font-bold text-emerald-400">
+          <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-[#E2E7EE]">
+            <span className="text-[#5B6B7F] block mb-1">Estado SUNAT</span>
+            <span className="inline-flex items-center gap-1 font-bold text-[#176B3F]">
               <CheckCircle2 className="w-3.5 h-3.5" />
               {profile?.sunat_status || 'ACTIVO'}
             </span>
           </div>
-          <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-750">
-            <span className="text-slate-400 block mb-1">Condición Domiciliaria</span>
-            <span className="inline-flex items-center gap-1 font-bold text-emerald-400">
+          <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-[#E2E7EE]">
+            <span className="text-[#5B6B7F] block mb-1">Condición Domiciliaria</span>
+            <span className="inline-flex items-center gap-1 font-bold text-[#176B3F]">
               <CheckCircle2 className="w-3.5 h-3.5" />
               {profile?.sunat_condition || 'HABIDO'}
             </span>
           </div>
-          <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-750">
-            <span className="text-slate-400 block mb-1">Verificación en Red</span>
-            <span className="inline-flex items-center gap-1 font-bold text-indigo-400">
+          <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-[#E2E7EE]">
+            <span className="text-[#5B6B7F] block mb-1">Verificación en Red</span>
+            <span className="inline-flex items-center gap-1 font-bold text-[#0A7469]">
               <ShieldCheck className="w-3.5 h-3.5" />
               Proveedor Verificado
             </span>
@@ -362,36 +361,36 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
       </div>
 
       {/* 2. Preferencias de Notificaciones */}
-      <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 space-y-4">
+      <div className="bg-white rounded-2xl p-6 border border-[#E2E7EE] shadow-sm space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <Bell className="w-5 h-5 text-indigo-400" />
+          <h2 className="text-base font-bold text-[#0B2545] flex items-center gap-2">
+            <Bell className="w-5 h-5 text-[#0A7469]" />
             Preferencias de Notificaciones de Pagos y Aprobación
           </h2>
           <button
             type="button"
             onClick={handleSaveNotifications}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-semibold shadow-md shadow-[#0A7469]/20 transition-colors"
           >
             <Save className="w-4 h-4" />
             <span>Guardar Preferencias</span>
           </button>
         </div>
 
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-[#5B6B7F]">
           Activa o desactiva los canales por los que deseas recibir alertas sobre cambios de estado en tus comprobantes y avisos de abono bancario.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
           {/* Email toggle */}
-          <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-750 flex items-center justify-between">
+          <div className="p-4 rounded-xl bg-[#F8FAFC] border border-[#E2E7EE] flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400">
+              <div className="p-2 rounded-lg bg-[#E8F4F2] text-[#0A7469]">
                 <Mail className="w-4 h-4" />
               </div>
               <div>
-                <span className="text-xs font-bold text-white block">Notificaciones por Email</span>
-                <span className="text-[11px] text-slate-400">Alertas de recepción, 3-Way match y fechas de pago</span>
+                <span className="text-xs font-bold text-[#0B2545] block">Notificaciones por Email</span>
+                <span className="text-[11px] text-[#5B6B7F]">Alertas de recepción, 3-Way match y fechas de pago</span>
               </div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
@@ -401,19 +400,19 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
                 onChange={(e) => setEmailEnabled(e.target.checked)}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#0A7469]"></div>
             </label>
           </div>
 
           {/* WhatsApp toggle */}
-          <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-750 flex items-center justify-between">
+          <div className="p-4 rounded-xl bg-[#F8FAFC] border border-[#E2E7EE] flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+              <div className="p-2 rounded-lg bg-[#E7F5EC] text-[#176B3F]">
                 <Phone className="w-4 h-4" />
               </div>
               <div>
-                <span className="text-xs font-bold text-white block">Notificaciones por WhatsApp</span>
-                <span className="text-[11px] text-slate-400">Avisos automáticos de abono e incidencias directas</span>
+                <span className="text-xs font-bold text-[#0B2545] block">Notificaciones por WhatsApp</span>
+                <span className="text-[11px] text-[#5B6B7F]">Avisos automáticos de abono e incidencias directas</span>
               </div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
@@ -423,28 +422,28 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
                 onChange={(e) => setWhatsappEnabled(e.target.checked)}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#176B3F]"></div>
             </label>
           </div>
         </div>
 
         {/* Email addresses list for alerts */}
         <div className="pt-2">
-          <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+          <label className="block text-xs font-semibold text-[#0B2545] uppercase tracking-wider mb-2">
             Correos destinatarios para avisos de cobranza:
           </label>
           <div className="flex flex-wrap gap-2 mb-3">
             {notificationEmails.map((email) => (
               <span
                 key={email}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-white"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#F8FAFC] border border-[#E2E7EE] text-xs text-[#0B2545]"
               >
-                <Mail className="w-3.5 h-3.5 text-indigo-400" />
+                <Mail className="w-3.5 h-3.5 text-[#0A7469]" />
                 <span>{email}</span>
                 <button
                   type="button"
                   onClick={() => handleRemoveEmail(email)}
-                  className="text-slate-400 hover:text-rose-400 transition-colors ml-1"
+                  className="text-[#5B6B7F] hover:text-[#B42318] transition-colors ml-1"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -458,12 +457,12 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
               value={newEmailInput}
               onChange={(e) => setNewEmailInput(e.target.value)}
               placeholder="nuevo.correo@empresa.com"
-              className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-xs focus:ring-2 focus:ring-indigo-500"
+              className="flex-1 px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545] text-xs focus:ring-2 focus:ring-[#0A7469]"
             />
             <button
               type="button"
               onClick={handleAddEmail}
-              className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-750 text-indigo-300 border border-slate-700 text-xs font-semibold flex items-center gap-1"
+              className="px-3.5 py-2 rounded-lg bg-[#F3F5F8] hover:bg-[#E2E7EE] text-[#0B2545] border border-[#E2E7EE] text-xs font-semibold flex items-center gap-1"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Agregar</span>
@@ -473,21 +472,21 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
       </div>
 
       {/* 3. Personas y Contactos */}
-      <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 space-y-4">
+      <div className="bg-white rounded-2xl p-6 border border-[#E2E7EE] shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <UserCog className="w-5 h-5 text-indigo-400" />
+            <h2 className="text-base font-bold text-[#0B2545] flex items-center gap-2">
+              <UserCog className="w-5 h-5 text-[#0A7469]" />
               Personas y Contactos Registrados
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-[#5B6B7F] mt-0.5">
               Contactos autorizados para consultas de facturación y coordinación con compradores.
             </p>
           </div>
           <button
             type="button"
             onClick={() => setShowAddContact(!showAddContact)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-semibold transition-colors"
           >
             <Plus className="w-4 h-4" />
             <span>Nuevo Contacto</span>
@@ -498,48 +497,48 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
         {showAddContact && (
           <form
             onSubmit={handleCreateContact}
-            className="p-4 rounded-xl bg-slate-850 border border-indigo-500/30 space-y-3 text-xs"
+            className="p-4 rounded-xl bg-[#F8FAFC] border border-[#0A7469]/30 space-y-3 text-xs"
           >
-            <h3 className="font-bold text-indigo-300">Registrar Nuevo Contacto</h3>
+            <h3 className="font-bold text-[#0B2545]">Registrar Nuevo Contacto</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
               <div>
-                <label className="block text-slate-400 mb-1">Nombre Completo</label>
+                <label className="block text-[#5B6B7F] mb-1">Nombre Completo</label>
                 <input
                   type="text"
                   required
                   value={newContactName}
                   onChange={(e) => setNewContactName(e.target.value)}
                   placeholder="Ej. Juan Pérez"
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                  className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545]"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">Correo Electrónico</label>
+                <label className="block text-[#5B6B7F] mb-1">Correo Electrónico</label>
                 <input
                   type="email"
                   required
                   value={newContactEmail}
                   onChange={(e) => setNewContactEmail(e.target.value)}
                   placeholder="juan@empresa.com"
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                  className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545]"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">Teléfono / Celular</label>
+                <label className="block text-[#5B6B7F] mb-1">Teléfono / Celular</label>
                 <input
                   type="text"
                   value={newContactPhone}
                   onChange={(e) => setNewContactPhone(e.target.value)}
                   placeholder="+51 987 654 321"
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                  className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545]"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">Rol / Cargo</label>
+                <label className="block text-[#5B6B7F] mb-1">Rol / Cargo</label>
                 <select
                   value={newContactRole}
                   onChange={(e) => setNewContactRole(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                  className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545]"
                 >
                   <option value="Cobranzas y Facturación">Cobranzas y Facturación</option>
                   <option value="Ejecutivo Comercial">Ejecutivo Comercial</option>
@@ -552,13 +551,13 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
               <button
                 type="button"
                 onClick={() => setShowAddContact(false)}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
+                className="px-3 py-1.5 rounded-lg bg-white border border-[#E2E7EE] text-[#5B6B7F] hover:text-[#0B2545]"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold"
+                className="px-4 py-1.5 rounded-lg bg-[#0A7469] hover:bg-[#075A52] text-white font-semibold"
               >
                 Guardar Contacto
               </button>
@@ -571,25 +570,25 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
           {contacts.map((contact) => (
             <div
               key={contact.id}
-              className="p-4 rounded-xl bg-slate-800/60 border border-slate-750 flex items-start justify-between"
+              className="p-4 rounded-xl bg-[#F8FAFC] border border-[#E2E7EE] flex items-start justify-between"
             >
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-white">{contact.name}</span>
+                  <span className="text-sm font-bold text-[#0B2545]">{contact.name}</span>
                   {contact.is_primary && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
+                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#E8F4F2] text-[#0A7469] border border-[#0A7469]/30">
                       Principal
                     </span>
                   )}
                 </div>
-                <span className="text-xs text-indigo-400 font-medium block">{contact.role}</span>
-                <div className="text-xs text-slate-400 flex items-center gap-2 pt-1">
-                  <Mail className="w-3.5 h-3.5 text-slate-500" />
+                <span className="text-xs text-[#0A7469] font-semibold block">{contact.role}</span>
+                <div className="text-xs text-[#5B6B7F] flex items-center gap-2 pt-1">
+                  <Mail className="w-3.5 h-3.5 text-[#5B6B7F]" />
                   <span>{contact.email}</span>
                 </div>
                 {contact.phone && (
-                  <div className="text-xs text-slate-400 flex items-center gap-2">
-                    <Phone className="w-3.5 h-3.5 text-slate-500" />
+                  <div className="text-xs text-[#5B6B7F] flex items-center gap-2">
+                    <Phone className="w-3.5 h-3.5 text-[#5B6B7F]" />
                     <span>{contact.phone}</span>
                   </div>
                 )}
@@ -597,7 +596,7 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
               <button
                 type="button"
                 onClick={() => handleDeleteContact(contact.id)}
-                className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-slate-700/60 transition-colors"
+                className="p-1.5 rounded-lg text-[#5B6B7F] hover:text-[#B42318] hover:bg-white transition-colors"
                 title="Eliminar contacto"
               >
                 <Trash2 className="w-4 h-4" />
@@ -608,21 +607,21 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
       </div>
 
       {/* 4. Cuentas Bancarias */}
-      <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 space-y-4">
+      <div className="bg-white rounded-2xl p-6 border border-[#E2E7EE] shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <Landmark className="w-5 h-5 text-indigo-400" />
+            <h2 className="text-base font-bold text-[#0B2545] flex items-center gap-2">
+              <Landmark className="w-5 h-5 text-[#0A7469]" />
               Cuentas Bancarias para Cobro y Detracciones
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-[#5B6B7F] mt-0.5">
               Cuentas corrientes y de detracciones validadas donde el cliente programa los pagos.
             </p>
           </div>
           <button
             type="button"
             onClick={() => setShowAddBank(!showAddBank)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-semibold transition-colors"
           >
             <Plus className="w-4 h-4" />
             <span>Nueva Cuenta Bancaria</span>
@@ -633,16 +632,16 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
         {showAddBank && (
           <form
             onSubmit={handleCreateBankAccount}
-            className="p-4 rounded-xl bg-slate-850 border border-indigo-500/30 space-y-3 text-xs"
+            className="p-4 rounded-xl bg-[#F8FAFC] border border-[#0A7469]/30 space-y-3 text-xs"
           >
-            <h3 className="font-bold text-indigo-300">Registrar Cuenta Bancaria</h3>
+            <h3 className="font-bold text-[#0B2545]">Registrar Cuenta Bancaria</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               <div>
-                <label className="block text-slate-400 mb-1">Entidad Bancaria</label>
+                <label className="block text-[#5B6B7F] mb-1">Entidad Bancaria</label>
                 <select
                   value={bankName}
                   onChange={(e) => setBankName(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                  className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545]"
                 >
                   <option value="BCP - Banco de Crédito del Perú">BCP - Banco de Crédito del Perú</option>
                   <option value="BBVA Continental">BBVA Continental</option>
@@ -654,22 +653,22 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
                 </select>
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">Moneda</label>
+                <label className="block text-[#5B6B7F] mb-1">Moneda</label>
                 <select
                   value={accountCurrency}
                   onChange={(e) => setAccountCurrency(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                  className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545]"
                 >
                   <option value="PEN">Soles (PEN - S/)</option>
                   <option value="USD">Dólares Americanos (USD - $)</option>
                 </select>
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">Tipo de Cuenta</label>
+                <label className="block text-[#5B6B7F] mb-1">Tipo de Cuenta</label>
                 <select
                   value={accountType}
                   onChange={(e) => setAccountType(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                  className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545]"
                 >
                   <option value="CORRIENTE">Cuenta Corriente</option>
                   <option value="AHORROS">Cuenta de Ahorros</option>
@@ -677,24 +676,24 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
                 </select>
               </div>
               <div className="sm:col-span-2">
-                <label className="block text-slate-400 mb-1">Número de Cuenta</label>
+                <label className="block text-[#5B6B7F] mb-1">Número de Cuenta</label>
                 <input
                   type="text"
                   required
                   value={accountNumber}
                   onChange={(e) => setAccountNumber(e.target.value)}
                   placeholder="Ej. 191-8849201-0-44"
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono"
+                  className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">Código Interbancario (CCI - 20 dígitos)</label>
+                <label className="block text-[#5B6B7F] mb-1">Código Interbancario (CCI - 20 dígitos)</label>
                 <input
                   type="text"
                   value={accountCCI}
                   onChange={(e) => setAccountCCI(e.target.value)}
                   placeholder="002-191-008849201044-52"
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono"
+                  className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono"
                 />
               </div>
             </div>
@@ -702,13 +701,13 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
               <button
                 type="button"
                 onClick={() => setShowAddBank(false)}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
+                className="px-3 py-1.5 rounded-lg bg-white border border-[#E2E7EE] text-[#5B6B7F] hover:text-[#0B2545]"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold"
+                className="px-4 py-1.5 rounded-lg bg-[#0A7469] hover:bg-[#075A52] text-white font-semibold"
               >
                 Registrar Cuenta
               </button>
@@ -721,43 +720,43 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
           {bankAccounts.map((bank) => (
             <div
               key={bank.id}
-              className="p-4 rounded-xl bg-slate-800/60 border border-slate-750 flex flex-col justify-between space-y-3"
+              className="p-4 rounded-xl bg-[#F8FAFC] border border-[#E2E7EE] flex flex-col justify-between space-y-3"
             >
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-bold text-white truncate">{bank.bank_name}</span>
+                  <span className="text-xs font-bold text-[#0B2545] truncate">{bank.bank_name}</span>
                   <span
                     className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
                       bank.currency === 'PEN'
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : 'bg-blue-500/20 text-blue-300'
+                        ? 'bg-[#E7F5EC] text-[#176B3F]'
+                        : 'bg-[#E8EEF9] text-[#3A5A9B]'
                     }`}
                   >
                     {bank.currency}
                   </span>
                 </div>
-                <span className="text-[11px] font-semibold text-indigo-400 uppercase tracking-wide block">
+                <span className="text-[11px] font-semibold text-[#0A7469] uppercase tracking-wide block">
                   {bank.account_type}
                 </span>
-                <p className="text-xs font-mono text-slate-300 mt-2">
-                  <span className="text-slate-500 block text-[10px]">Cuenta:</span>
+                <p className="text-xs font-mono text-[#0B2545] mt-2">
+                  <span className="text-[#5B6B7F] block text-[10px]">Cuenta:</span>
                   {bank.account_number}
                 </p>
                 {bank.cci && (
-                  <p className="text-xs font-mono text-slate-400 mt-1">
-                    <span className="text-slate-500 block text-[10px]">CCI:</span>
+                  <p className="text-xs font-mono text-[#5B6B7F] mt-1">
+                    <span className="text-[#5B6B7F] block text-[10px]">CCI:</span>
                     {bank.cci}
                   </p>
                 )}
               </div>
-              <div className="pt-2 border-t border-slate-700/60 flex items-center justify-between text-xs">
+              <div className="pt-2 border-t border-[#E2E7EE] flex items-center justify-between text-xs">
                 {bank.is_primary ? (
-                  <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                  <span className="text-[#176B3F] font-semibold flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     Cuenta Principal
                   </span>
                 ) : (
-                  <span className="text-slate-500 text-[11px]">Secundaria</span>
+                  <span className="text-[#5B6B7F] text-[11px]">Secundaria</span>
                 )}
               </div>
             </div>

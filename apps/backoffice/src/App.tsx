@@ -36,12 +36,34 @@ const client = new FactumfluxClient({
 export default function App() {
   const [authMode, setAuthMode] = useState<
     'client_login' | 'client_portal' | 'superadmin_login' | 'superadmin_portal'
-  >('client_portal');
+  >(() => {
+    const isSuperAdminRequested =
+      typeof window !== 'undefined' &&
+      (window.location.pathname.includes('/superadmin') || window.location.search.includes('superadmin'));
 
-  const [tenantInfo, setTenantInfo] = useState({
-    tenantId: 'a1111111-1111-1111-1111-111111111111',
-    tenantName: 'La Bodega de la Trattoria S.A.C.',
-    email: 'compras@trattoria.com.pe',
+    if (isSuperAdminRequested) {
+      return localStorage.getItem('factumflux_superadmin_auth') === 'true'
+        ? 'superadmin_portal'
+        : 'superadmin_login';
+    }
+
+    return localStorage.getItem('factumflux_client_auth') === 'true'
+      ? 'client_portal'
+      : 'client_login';
+  });
+
+  const [tenantInfo, setTenantInfo] = useState(() => {
+    try {
+      const saved = localStorage.getItem('factumflux_client_info');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // Ignore
+    }
+    return {
+      tenantId: 'a1111111-1111-1111-1111-111111111111',
+      tenantName: 'La Bodega de la Trattoria S.A.C.',
+      email: 'compras@trattoria.com.pe',
+    };
   });
 
   const [currentTab, setCurrentTab] = useState<ClientNavTab>('dashboard');
@@ -85,6 +107,30 @@ export default function App() {
       loadInvoicesAndOrders();
     }
   }, [authMode]);
+
+  const handleClientLogin = (data: { tenantId: string; tenantName: string; email: string }) => {
+    localStorage.setItem('factumflux_client_auth', 'true');
+    localStorage.setItem('factumflux_client_info', JSON.stringify(data));
+    setTenantInfo(data);
+    setAuthMode('client_portal');
+    setCurrentTab('dashboard');
+  };
+
+  const handleClientLogout = () => {
+    localStorage.removeItem('factumflux_client_auth');
+    localStorage.removeItem('factumflux_client_info');
+    setAuthMode('client_login');
+  };
+
+  const handleSuperAdminLogin = () => {
+    localStorage.setItem('factumflux_superadmin_auth', 'true');
+    setAuthMode('superadmin_portal');
+  };
+
+  const handleSuperAdminLogout = () => {
+    localStorage.removeItem('factumflux_superadmin_auth');
+    setAuthMode('superadmin_login');
+  };
 
   const handleValidateSUNAT = async (invoiceId: string) => {
     setProcessingInvoiceId(invoiceId);
@@ -155,11 +201,7 @@ export default function App() {
   if (authMode === 'client_login') {
     return (
       <ClientLoginScreen
-        onLogin={(data) => {
-          setTenantInfo(data);
-          setAuthMode('client_portal');
-          setCurrentTab('dashboard');
-        }}
+        onLogin={handleClientLogin}
         onNavigateToSuperAdmin={() => setAuthMode('superadmin_login')}
       />
     );
@@ -169,7 +211,7 @@ export default function App() {
   if (authMode === 'superadmin_login') {
     return (
       <SuperAdminLoginScreen
-        onLogin={() => setAuthMode('superadmin_portal')}
+        onLogin={handleSuperAdminLogin}
         onBackToClientLogin={() => setAuthMode('client_login')}
       />
     );
@@ -178,18 +220,18 @@ export default function App() {
   // 3. Isolated SuperAdmin Platform Console
   if (authMode === 'superadmin_portal') {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
+      <div className="min-h-screen bg-[#07192F] text-slate-100">
         <SuperAdminConsoleView
           client={client}
-          onExit={() => setAuthMode('client_portal')}
+          onExit={handleSuperAdminLogout}
         />
       </div>
     );
   }
 
-  // 4. Client BackOffice Portal (Default authorized mode)
+  // 4. Client BackOffice Portal (Authenticated mode with Factumflux Design System)
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
+    <div className="flex h-screen bg-[#F8FAFC] text-[#0B2545] font-sans overflow-hidden selection:bg-[#E8F4F2] selection:text-[#0A7469]">
       {/* Collapsible Sidebar */}
       <ClientSidebar
         currentTab={currentTab}
@@ -197,42 +239,42 @@ export default function App() {
         tenantName={tenantInfo.tenantName}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        onLogout={() => setAuthMode('client_login')}
+        onLogout={handleClientLogout}
         onSwitchToSuperAdmin={() => setAuthMode('superadmin_login')}
       />
 
       {/* Main View Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-950">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F8FAFC]">
         {/* Top Navbar */}
-        <header className="h-16 px-6 border-b border-slate-800 bg-slate-900/60 backdrop-blur-md flex items-center justify-between flex-shrink-0 z-10">
+        <header className="h-16 px-6 border-b border-[#E2E7EE] bg-white flex items-center justify-between flex-shrink-0 z-10 shadow-sm">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#E8F4F2] text-[#0A7469] border border-[#0A7469]/20 uppercase tracking-wider">
               BackOffice Cliente
             </span>
-            <span className="text-slate-500 text-xs">•</span>
-            <span className="text-xs text-slate-300 font-medium truncate">
+            <span className="text-[#5B6B7F] text-xs">•</span>
+            <span className="text-xs text-[#0B2545] font-semibold truncate max-w-xs md:max-w-md">
               {tenantInfo.tenantName}
             </span>
           </div>
 
           <div className="flex items-center gap-3 text-xs">
-            <span className="hidden sm:inline-block text-slate-400">
-              Usuario: <strong className="text-white">{tenantInfo.email}</strong>
+            <span className="hidden sm:inline-block text-[#5B6B7F]">
+              Usuario: <strong className="text-[#0B2545]">{tenantInfo.email}</strong>
             </span>
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Sesión activa" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#0A7469] animate-pulse" title="Sesión activa" />
           </div>
         </header>
 
         {/* Global Action Message Banner */}
         {actionMessage && (
-          <div className="px-6 py-2.5 bg-indigo-950/60 border-b border-indigo-500/30 text-indigo-200 text-xs flex items-center justify-between">
+          <div className="px-6 py-2.5 bg-[#E8F4F2] border-b border-[#0A7469]/30 text-[#0A7469] text-xs font-medium flex items-center justify-between">
             <span className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <CheckCircle2 className="w-4 h-4 text-[#0A7469]" />
               {actionMessage}
             </span>
             <button
               onClick={() => setActionMessage(null)}
-              className="text-slate-400 hover:text-white"
+              className="text-[#5B6B7F] hover:text-[#0B2545]"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -256,17 +298,17 @@ export default function App() {
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-                    <FileText className="w-6 h-6 text-indigo-400" />
+                  <h1 className="text-2xl font-bold text-[#0B2545] tracking-tight flex items-center gap-2">
+                    <FileText className="w-6 h-6 text-[#0A7469]" />
                     Facturas Recibidas de Proveedores
                   </h1>
-                  <p className="text-sm text-slate-400 mt-1">
+                  <p className="text-sm text-[#5B6B7F] mt-1">
                     Cruce 3-Way Match con órdenes ERP, validación SUNAT y contabilización en SAP.
                   </p>
                 </div>
                 <button
                   onClick={loadInvoicesAndOrders}
-                  className="p-2.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors border border-slate-700 self-start sm:self-auto"
+                  className="p-2.5 rounded-xl bg-white text-[#5B6B7F] hover:text-[#0B2545] hover:bg-[#F8FAFC] transition-colors border border-[#E2E7EE] shadow-sm self-start sm:self-auto"
                   title="Actualizar listado"
                 >
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -274,11 +316,11 @@ export default function App() {
               </div>
 
               {/* Invoices Table */}
-              <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-sm">
+              <div className="bg-white rounded-2xl border border-[#E2E7EE] overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-sm">
                     <thead>
-                      <tr className="border-b border-slate-800 bg-slate-850/50 text-slate-400 text-xs uppercase tracking-wider">
+                      <tr className="border-b border-[#E2E7EE] bg-[#F8FAFC] text-[#5B6B7F] text-xs uppercase tracking-wider">
                         <th className="py-3.5 px-4 font-semibold">Comprobante</th>
                         <th className="py-3.5 px-4 font-semibold">Proveedor</th>
                         <th className="py-3.5 px-4 font-semibold">Orden Vinculada</th>
@@ -288,31 +330,31 @@ export default function App() {
                         <th className="py-3.5 px-4 font-semibold text-right">Acciones CxP</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/60">
+                    <tbody className="divide-y divide-[#E2E7EE]">
                       {invoices.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="py-12 text-center text-slate-400">
+                          <td colSpan={7} className="py-12 text-center text-[#5B6B7F]">
                             No se registran facturas pendientes.
                           </td>
                         </tr>
                       ) : (
                         invoices.map((inv) => (
-                          <tr key={inv.id} className="hover:bg-slate-800/40 transition-colors">
+                          <tr key={inv.id} className="hover:bg-[#F8FAFC]/80 transition-colors">
                             <td className="py-4 px-4">
-                              <span className="font-bold text-white tracking-wide block">
+                              <span className="font-bold text-[#0B2545] tracking-wide block">
                                 {inv.series}-{inv.number}
                               </span>
                               <div className="flex items-center gap-1.5 mt-0.5">
-                                <span className="text-[10px] text-slate-400">
+                                <span className="text-[10px] text-[#5B6B7F]">
                                   {inv.document_type === '01' ? 'Factura' : inv.document_type}
                                 </span>
                                 {inv.has_gre && (
-                                  <span className="text-[10px] font-bold px-1 rounded bg-cyan-500/10 text-cyan-400">
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-50 text-cyan-700 border border-cyan-200">
                                     GRE
                                   </span>
                                 )}
                                 {inv.is_factored && (
-                                  <span className="text-[10px] font-bold px-1 rounded bg-purple-500/10 text-purple-300" title={`Cesión a: ${inv.factoring_entity_name || 'Entidad'}`}>
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200" title={`Cesión a: ${inv.factoring_entity_name || 'Entidad'}`}>
                                     FACTORING
                                   </span>
                                 )}
@@ -320,19 +362,19 @@ export default function App() {
                             </td>
 
                             <td className="py-4 px-4">
-                              <span className="font-semibold text-slate-200 block text-xs">
+                              <span className="font-semibold text-[#0B2545] block text-xs">
                                 {inv.supplier_name || 'Distribuidora de Alimentos del Sur S.A.C.'}
                               </span>
-                              <span className="text-[11px] font-mono text-slate-400">
+                              <span className="text-[11px] font-mono text-[#5B6B7F]">
                                 {inv.supplier_ruc || '20601234567'}
                               </span>
                             </td>
 
-                            <td className="py-4 px-4 font-mono text-xs text-indigo-300">
+                            <td className="py-4 px-4 font-mono text-xs font-medium text-[#0A7469]">
                               {inv.po_number || 'OC-2026-8941'}
                             </td>
 
-                            <td className="py-4 px-4 font-bold text-white text-sm">
+                            <td className="py-4 px-4 font-bold text-[#0B2545] text-sm">
                               {inv.currency === 'PEN' ? 'S/' : '$'}{' '}
                               {inv.total_amount.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                             </td>
@@ -341,10 +383,10 @@ export default function App() {
                               <span
                                 className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
                                   inv.processing_status === 'Procesada/Contabilizada'
-                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                     : inv.processing_status === 'Enviado'
-                                    ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-200'
                                 }`}
                               >
                                 {inv.processing_status || 'En revisión'}
@@ -353,16 +395,16 @@ export default function App() {
 
                             <td className="py-4 px-4">
                               <span
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                                   inv.payment_status === 'Pagado'
-                                    ? 'bg-emerald-500/10 text-emerald-400'
-                                    : 'bg-amber-500/10 text-amber-400'
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : 'bg-amber-50 text-amber-700'
                                 }`}
                               >
                                 {inv.payment_status || 'Pendiente'}
                               </span>
                               {inv.payment_scheduled_date && (
-                                <span className="block text-[10px] text-slate-400 mt-0.5">
+                                <span className="block text-[10px] text-[#5B6B7F] mt-0.5">
                                   Prog: {inv.payment_scheduled_date}
                                 </span>
                               )}
@@ -372,21 +414,21 @@ export default function App() {
                               <button
                                 onClick={() => handleValidateSUNAT(inv.id)}
                                 disabled={processingInvoiceId === inv.id}
-                                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 text-xs font-medium border border-slate-700 transition-colors"
+                                className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#F8FAFC] text-[#0B2545] text-xs font-medium border border-[#E2E7EE] shadow-sm transition-colors"
                               >
                                 SUNAT
                               </button>
                               <button
                                 onClick={() => handleRunMatch(inv.id)}
                                 disabled={processingInvoiceId === inv.id}
-                                className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors"
+                                className="px-2.5 py-1 rounded-lg bg-[#0B2545] hover:bg-[#07192F] text-white text-xs font-medium transition-colors"
                               >
                                 Match
                               </button>
                               <button
                                 onClick={() => handlePostToSAP(inv.id)}
                                 disabled={processingInvoiceId === inv.id}
-                                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-colors"
+                                className="px-2.5 py-1 rounded-lg bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-medium transition-colors"
                               >
                                 Post SAP
                               </button>
@@ -406,17 +448,17 @@ export default function App() {
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-                    <ShoppingCart className="w-6 h-6 text-indigo-400" />
+                  <h1 className="text-2xl font-bold text-[#0B2545] tracking-tight flex items-center gap-2">
+                    <ShoppingCart className="w-6 h-6 text-[#0A7469]" />
                     Órdenes de Compra y Recepciones (MIGO / HES)
                   </h1>
-                  <p className="text-sm text-slate-400 mt-1">
-                    Carga masiva delimitada de órdenes de compra, entradas de almacén (MIGO) y conformidades de servicio (HES).
+                  <p className="text-sm text-[#5B6B7F] mt-1">
+                    Carga masiva de órdenes de compra, entradas de almacén (MIGO) y conformidades de servicio (HES).
                   </p>
                 </div>
                 <button
                   onClick={() => setIsIngestingCSV(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-md shadow-indigo-600/30"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-semibold text-xs transition-all shadow-sm"
                 >
                   <UploadCloud className="w-4 h-4" />
                   <span>Ingesta CSV (MIGO / HES)</span>
@@ -424,10 +466,10 @@ export default function App() {
               </div>
 
               {/* Purchase Orders Table */}
-              <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden text-xs">
+              <div className="bg-white rounded-2xl border border-[#E2E7EE] overflow-hidden shadow-sm text-xs">
                 <table className="w-full text-left">
                   <thead>
-                    <tr className="border-b border-slate-800 bg-slate-850/50 text-slate-400 uppercase">
+                    <tr className="border-b border-[#E2E7EE] bg-[#F8FAFC] text-[#5B6B7F] uppercase tracking-wider font-semibold">
                       <th className="py-3 px-4">Orden</th>
                       <th className="py-3 px-4">Proveedor</th>
                       <th className="py-3 px-4">Fecha Emisión</th>
@@ -435,20 +477,20 @@ export default function App() {
                       <th className="py-3 px-4">Estado ERP</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/60 text-slate-300 font-mono">
+                  <tbody className="divide-y divide-[#E2E7EE] text-[#0B2545]">
                     {orders.map((po) => (
-                      <tr key={po.id} className="hover:bg-slate-800/40">
-                        <td className="py-3 px-4 font-bold text-indigo-300">{po.po_number}</td>
-                        <td className="py-3 px-4 font-sans">
-                          <span className="text-white block font-medium">{po.supplier_name}</span>
-                          <span className="text-[10px] text-slate-400 font-mono">RUC: {po.supplier_ruc}</span>
+                      <tr key={po.id} className="hover:bg-[#F8FAFC]/80 transition-colors">
+                        <td className="py-3 px-4 font-mono font-bold text-[#0A7469]">{po.po_number}</td>
+                        <td className="py-3 px-4">
+                          <span className="text-[#0B2545] block font-medium">{po.supplier_name}</span>
+                          <span className="text-[10px] text-[#5B6B7F] font-mono">RUC: {po.supplier_ruc}</span>
                         </td>
-                        <td className="py-3 px-4">{po.issue_date}</td>
-                        <td className="py-3 px-4 font-bold text-white">
+                        <td className="py-3 px-4 text-[#5B6B7F]">{po.issue_date}</td>
+                        <td className="py-3 px-4 font-bold text-[#0B2545]">
                           {po.currency} {po.total_amount.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                         </td>
                         <td className="py-3 px-4">
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                             {po.status}
                           </span>
                         </td>
@@ -469,53 +511,53 @@ export default function App() {
           {currentTab === 'policies' && policy && (
             <div className="max-w-3xl space-y-6">
               <div>
-                <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-                  <Sliders className="w-6 h-6 text-indigo-400" />
+                <h1 className="text-2xl font-bold text-[#0B2545] tracking-tight flex items-center gap-2">
+                  <Sliders className="w-6 h-6 text-[#0A7469]" />
                   Políticas de Cuadre y Tolerancias (CEL)
                 </h1>
-                <p className="text-sm text-slate-400 mt-1">
+                <p className="text-sm text-[#5B6B7F] mt-1">
                   Reglas dinámicas Common Expression Language (CEL) evaluadas en cada 3-Way Match.
                 </p>
               </div>
 
-              <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 space-y-4 text-xs">
+              <div className="bg-white rounded-2xl p-6 border border-[#E2E7EE] space-y-4 text-xs shadow-sm">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-slate-400 mb-1">Tolerancia de Precio (%)</label>
+                    <label className="block text-[#5B6B7F] font-semibold mb-1">Tolerancia de Precio (%)</label>
                     <input
                       type="number"
                       value={policy.price_tolerance_pct}
                       onChange={(e) => setPolicy({ ...policy, price_tolerance_pct: parseFloat(e.target.value) })}
-                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-mono"
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono focus:outline-none focus:border-[#0A7469]"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-400 mb-1">Tolerancia Absoluta (PEN)</label>
+                    <label className="block text-[#5B6B7F] font-semibold mb-1">Tolerancia Absoluta (PEN)</label>
                     <input
                       type="number"
                       value={policy.price_tolerance_abs}
                       onChange={(e) => setPolicy({ ...policy, price_tolerance_abs: parseFloat(e.target.value) })}
-                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-mono"
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono focus:outline-none focus:border-[#0A7469]"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2 pt-2">
-                  <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
+                  <label className="flex items-center gap-2 text-[#0B2545] cursor-pointer">
                     <input
                       type="checkbox"
                       checked={policy.require_hes_for_services}
                       onChange={(e) => setPolicy({ ...policy, require_hes_for_services: e.target.checked })}
-                      className="rounded bg-slate-800 text-indigo-600 border-slate-700"
+                      className="rounded text-[#0A7469] focus:ring-[#0A7469]"
                     />
                     <span>Exigir Hoja de Entrada de Servicios (HES) aprobada para órdenes de servicio</span>
                   </label>
-                  <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
+                  <label className="flex items-center gap-2 text-[#0B2545] cursor-pointer">
                     <input
                       type="checkbox"
                       checked={policy.require_migo_for_goods}
                       onChange={(e) => setPolicy({ ...policy, require_migo_for_goods: e.target.checked })}
-                      className="rounded bg-slate-800 text-indigo-600 border-slate-700"
+                      className="rounded text-[#0A7469] focus:ring-[#0A7469]"
                     />
                     <span>Exigir Entrada de Mercancías (GR/MIGO) para órdenes de bienes físicos</span>
                   </label>
@@ -526,7 +568,7 @@ export default function App() {
                     await client.updateTenantPolicy(policy);
                     setActionMessage('Políticas de cuadre actualizadas exitosamente.');
                   }}
-                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-colors"
+                  className="px-5 py-2.5 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-bold text-xs shadow-sm transition-colors"
                 >
                   Guardar Políticas
                 </button>
@@ -538,24 +580,24 @@ export default function App() {
 
       {/* CSV Ingestion Modal */}
       {isIngestingCSV && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4">
+        <div className="fixed inset-0 bg-[#0B2545]/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white border border-[#E2E7EE] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-white flex items-center gap-2">
-                <FileSpreadsheet className="w-5 h-5 text-indigo-400" />
+              <h3 className="font-bold text-[#0B2545] flex items-center gap-2">
+                <FileSpreadsheet className="w-5 h-5 text-[#0A7469]" />
                 Ingesta Masiva de Recepciones CSV
               </h3>
-              <button onClick={() => setIsIngestingCSV(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setIsIngestingCSV(false)} className="text-[#5B6B7F] hover:text-[#0B2545]">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-3 text-xs">
-              <label className="block text-slate-400 font-semibold">Tipo de archivo a ingestar:</label>
+              <label className="block text-[#5B6B7F] font-semibold">Tipo de archivo a ingestar:</label>
               <select
                 value={csvType}
                 onChange={(e) => setCsvType(e.target.value as any)}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white"
+                className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
               >
                 <option value="po">Órdenes de Compra (purchase_orders.csv)</option>
                 <option value="gr">Entrada de Mercancías MIGO (goods_receipts.csv)</option>
@@ -577,7 +619,7 @@ export default function App() {
                   type="button"
                   disabled={isUploadingCSV}
                   onClick={() => csvFileInputRef.current?.click()}
-                  className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center justify-center gap-2"
+                  className="w-full py-3 px-4 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-bold flex items-center justify-center gap-2 shadow-sm transition-colors"
                 >
                   {isUploadingCSV ? (
                     <span>Procesando archivo CSV...</span>

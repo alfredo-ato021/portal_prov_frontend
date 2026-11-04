@@ -6,7 +6,6 @@ import {
   UserCog,
   MessageSquare,
   LogOut,
-  Building2,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -68,26 +67,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className={`relative flex flex-col bg-slate-900 border-r border-slate-800 text-slate-300 transition-all duration-300 select-none z-30 ${
+      className={`relative flex flex-col bg-[#0B2545] border-r border-[#1F3558] text-[#F3F5F8] transition-all duration-300 select-none z-30 ${
         isCollapsed ? 'w-20' : 'w-64'
       }`}
     >
       {/* Brand Header */}
-      <div className="flex items-center justify-between px-4 h-16 border-b border-slate-800">
+      <div className="flex items-center justify-between px-4 h-16 border-b border-[#1F3558]">
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-600/30 flex-shrink-0">
-            <Building2 className="w-5 h-5" />
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-[#0A7469] text-white font-bold text-lg shadow-md flex-shrink-0">
+            F
           </div>
           {!isCollapsed && (
             <div className="truncate">
-              <span className="font-bold text-white text-base tracking-tight">Factumflux</span>
-              <span className="block text-[11px] text-indigo-400 font-medium">Portal Proveedores</span>
+              <span className="font-bold text-white text-base tracking-tight">
+                Factum<span className="text-[#4FC9BE]">flux</span>
+              </span>
+              <span className="block text-[11px] text-[#4FC9BE] font-medium">Portal Proveedores</span>
             </div>
           )}
         </div>
         <button
           onClick={onToggleCollapse}
-          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+          className="p-1.5 rounded-lg text-[#9AA8BC] hover:text-white hover:bg-[#1F3558] transition-colors"
           title={isCollapsed ? 'Expandir menú' : 'Colapsar menú'}
         >
           {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
@@ -96,21 +97,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Supplier Identity Card */}
       {!isCollapsed ? (
-        <div className="px-4 py-3 mx-3 my-3 rounded-xl bg-slate-800/60 border border-slate-850">
+        <div className="px-4 py-3 mx-3 my-3 rounded-xl bg-[#07192F]/60 border border-[#1F3558]">
           <div className="flex items-center gap-2 mb-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[10px] font-semibold tracking-wider text-emerald-400 uppercase">
+            <span className="w-2 h-2 rounded-full bg-[#4FC9BE] animate-pulse" />
+            <span className="text-[10px] font-semibold tracking-wider text-[#4FC9BE] uppercase">
               RUC ACTIVO / HABIDO
             </span>
           </div>
-          <p className="text-xs font-medium text-white truncate" title={supplierName}>
+          <p className="text-xs font-semibold text-white truncate" title={supplierName}>
             {supplierName}
           </p>
-          <p className="text-[11px] text-slate-400 font-mono">RUC: {supplierRuc}</p>
+          <p className="text-[11px] text-[#9AA8BC] font-mono">RUC: {supplierRuc}</p>
         </div>
       ) : (
         <div className="flex justify-center my-3">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 ring-4 ring-emerald-500/20" title={`RUC: ${supplierRuc}`} />
+          <span className="w-2.5 h-2.5 rounded-full bg-[#4FC9BE] ring-4 ring-[#4FC9BE]/20" title={`RUC: ${supplierRuc}`} />
         </div>
       )}
 
@@ -125,19 +126,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onClick={() => onSelectTab(item.id)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                 isActive
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+                  ? 'bg-[#0A7469] text-white shadow-md shadow-[#0A7469]/30'
                   : item.highlight
-                  ? 'bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20 hover:text-white'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
+                  ? 'bg-[#0A7469]/20 text-[#4FC9BE] hover:bg-[#0A7469]/30 hover:text-white'
+                  : 'text-[#9AA8BC] hover:text-white hover:bg-[#1F3558]/60'
               }`}
               title={isCollapsed ? item.label : undefined}
             >
-              <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-white' : item.highlight ? 'text-indigo-400' : 'text-slate-400'}`} />
+              <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-white' : item.highlight ? 'text-[#4FC9BE]' : 'text-[#9AA8BC]'}`} />
               {!isCollapsed && (
                 <span className="flex-1 text-left truncate">{item.label}</span>
               )}
               {!isCollapsed && item.badge && (
-                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-indigo-500/30 text-indigo-300 border border-indigo-400/30">
+                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#4FC9BE]/20 text-[#4FC9BE] border border-[#4FC9BE]/30">
                   {item.badge}
                 </span>
               )}
@@ -147,10 +148,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       {/* Footer / Logout */}
-      <div className="p-3 border-t border-slate-800">
+      <div className="p-3 border-t border-[#1F3558]">
         <button
           onClick={onLogout}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-[#9AA8BC] hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
           title={isCollapsed ? 'Cerrar sesión' : undefined}
         >
           <LogOut className="w-5 h-5 flex-shrink-0" />

@@ -20,22 +20,38 @@ const client = new FactumfluxClient({
 });
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
-  const [supplierInfo, setSupplierInfo] = useState({
-    ruc: '20601234567',
-    email: 'contacto@alisur.com.pe',
-    name: 'Distribuidora de Alimentos del Sur S.A.C.',
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return localStorage.getItem('factumflux_supplier_authenticated') === 'true';
   });
+
+  const [supplierInfo, setSupplierInfo] = useState(() => {
+    try {
+      const saved = localStorage.getItem('factumflux_supplier_info');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // Ignore
+    }
+    return {
+      ruc: '20601234567',
+      email: 'contacto@alisur.com.pe',
+      name: 'Distribuidora de Alimentos del Sur S.A.C.',
+    };
+  });
+
   const [currentTab, setCurrentTab] = useState<SupplierNavTab>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const handleLogin = (credentials: { ruc: string; email: string; name: string }) => {
+    localStorage.setItem('factumflux_supplier_authenticated', 'true');
+    localStorage.setItem('factumflux_supplier_info', JSON.stringify(credentials));
     setSupplierInfo(credentials);
     setIsAuthenticated(true);
     setCurrentTab('dashboard');
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('factumflux_supplier_authenticated');
+    localStorage.removeItem('factumflux_supplier_info');
     setIsAuthenticated(false);
   };
 
@@ -44,7 +60,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
+    <div className="flex h-screen bg-[#F8FAFC] text-[#0B2545] font-sans overflow-hidden selection:bg-[#E8F4F2] selection:text-[#0A7469]">
       {/* Collapsible Sidebar */}
       <Sidebar
         currentTab={currentTab}
@@ -57,24 +73,24 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-950">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F8FAFC]">
         {/* Top Navbar */}
-        <header className="h-16 px-6 border-b border-slate-800 bg-slate-900/60 backdrop-blur-md flex items-center justify-between flex-shrink-0 z-10">
+        <header className="h-16 px-6 border-b border-[#E2E7EE] bg-white flex items-center justify-between flex-shrink-0 z-10 shadow-sm">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#E8F4F2] text-[#0A7469] border border-[#0A7469]/20 uppercase tracking-wider">
               Portal Proveedor
             </span>
-            <span className="text-slate-500 text-xs">•</span>
-            <span className="text-xs text-slate-400 truncate max-w-xs md:max-w-md">
-              Cliente: <strong>La Bodega de la Trattoria S.A.C.</strong>
+            <span className="text-[#5B6B7F] text-xs">•</span>
+            <span className="text-xs text-[#5B6B7F] truncate max-w-xs md:max-w-md">
+              Cliente: <strong className="text-[#0B2545]">La Bodega de la Trattoria S.A.C.</strong>
             </span>
           </div>
 
           <div className="flex items-center gap-3 text-xs">
-            <span className="hidden sm:inline-block text-slate-400">
-              Conectado como: <strong className="text-white">{supplierInfo.email}</strong>
+            <span className="hidden sm:inline-block text-[#5B6B7F]">
+              Conectado como: <strong className="text-[#0B2545]">{supplierInfo.email}</strong>
             </span>
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Sesión activa" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#0A7469] animate-pulse" title="Sesión activa" />
           </div>
         </header>
 

@@ -34,6 +34,7 @@ export default function LandingPage() {
   const backofficeUrl =
     (import.meta as any).env?.VITE_BACKOFFICE_URL ||
     (isLocal ? 'http://localhost:3001' : 'https://factumflux-backoffice-pxeov3gtya-tl.a.run.app');
+  const superadminUrl = `${backofficeUrl}?portal=superadmin`;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -82,6 +83,15 @@ export default function LandingPage() {
           </div>
 
           <div className="hidden md:flex items-center gap-3">
+            <a
+              href={superadminUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs font-semibold text-[#5B6B7F] hover:text-[#0B2545] px-3 py-1.5 rounded-lg border border-[#E2E7EE] hover:border-[#0B2545]/30 transition-colors flex items-center gap-1.5"
+              title="Consola de administración SaaS"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-[#0A7469]" /> SuperAdmin SaaS
+            </a>
             <a
               href={portalUrl}
               target="_blank"
@@ -147,6 +157,14 @@ export default function LandingPage() {
               Seguridad
             </a>
             <div className="pt-4 border-t border-[#E2E7EE] flex flex-col gap-2">
+              <a
+                href={superadminUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full text-center py-2 text-xs font-semibold border border-[#E2E7EE] rounded-lg text-[#5B6B7F] hover:text-[#0B2545] flex items-center justify-center gap-1.5"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-[#0A7469]" /> SuperAdmin SaaS
+              </a>
               <a
                 href={portalUrl}
                 target="_blank"
@@ -557,7 +575,10 @@ export default function LandingPage() {
             </span>
             <span>© 2026 Factumflux. Todos los derechos reservados.</span>
           </div>
-          <div className="flex gap-6">
+          <div className="flex gap-6 items-center">
+            <a href={superadminUrl} target="_blank" rel="noreferrer" className="text-[#0A7469] font-medium hover:underline">
+              SuperAdmin SaaS
+            </a>
             <a href="#seguridad" className="hover:text-[#0B2545]">Seguridad</a>
             <a href="#solucion" className="hover:text-[#0B2545]">Privacidad</a>
             <a href="#planes" className="hover:text-[#0B2545]">Términos de Servicio</a>
