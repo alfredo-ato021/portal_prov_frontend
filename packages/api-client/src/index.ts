@@ -143,12 +143,27 @@ export interface InvoiceSummary {
   issue_date: string;
   due_date?: string;
   currency: string;
+  subtotal?: number;
+  tax_amount?: number;
   total_amount: number;
   state: InvoiceInternalState;
+  processing_status?: 'Enviado' | 'En revisión' | 'Procesada/Contabilizada';
   sunat_status: 'pending' | 'accepted' | 'rejected' | 'annulled';
+  order_type?: 'BIEN' | 'SERVICIO';
+  po_number?: string;
+  supplier_ruc?: string;
+  supplier_name?: string;
+  is_factored?: boolean;
+  factoring_entity_name?: string;
+  has_gre?: boolean;
+  gre_series?: string;
+  gre_number?: string;
+  payment_status?: 'Pagado' | 'Pendiente';
+  payment_scheduled_date?: string;
+  paid_at?: string;
+  paid_amount?: number;
   rejection_reason?: string;
   action_required_note?: string;
-  payment_scheduled_date?: string;
 }
 
 export interface PurchaseOrder {
@@ -198,87 +213,128 @@ export interface ApiClientConfig {
   token?: string;
 }
 
-export interface DiscrepancyDetail {
-  code: string;
-  field: string;
-  expected: string;
-  actual: string;
-  variance?: number;
-  message: string;
-}
-
-export interface MatchingResult {
-  invoice_id: string;
-  purchase_order_id: string;
-  matching_type: '2_way' | '3_way' | '4_way';
-  category: 'goods' | 'service';
-  status: 'matched' | 'approved_with_tolerance' | 'discrepancy' | 'rejected';
-  price_variance: number;
-  quantity_variance: number;
-  tolerance_applied: boolean;
-  discrepancies: DiscrepancyDetail[];
-  summary_note: string;
-}
-
-export interface FiscalValidationResult {
-  status: 'accepted' | 'rejected' | 'annulled' | 'not_found';
-  response_code: string;
-  response_message: string;
-  issuer_condition: string;
-  issuer_status: string;
-  validated_at: string;
-}
-
-export interface ERPInvoiceConfirmation {
-  erp_document_id: string;
-  fiscal_year: string;
-  status: string;
-  accounting_document: string;
-  confirmed_at: string;
-  message: string;
-}
-
-export interface NegotiableAlert {
-  invoice_id: string;
+export interface NegotiableAlertItem {
+  id: string;
   series: string;
   number: string;
   supplier_ruc: string;
   supplier_name: string;
   issue_date: string;
   due_date?: string;
-  currency: string;
+  presumed_conformity_deadline: string;
+  days_remaining: number;
+  status_urgency: 'URGENT' | 'WARNING' | 'EXPIRING_SOON' | 'CONFORMITY_PRESUMED';
   total_amount: number;
-  state: InvoiceInternalState;
-  conformity_deadline: string;
-  hours_remaining: number;
-  is_urgent: boolean;
-  action_required_note?: string;
-}
-
-export type SIREComparisonStatus =
-  | 'match'
-  | 'missing_in_portal'
-  | 'missing_in_sire'
-  | 'amount_mismatch';
-
-export interface SIREDiscrepancyItem {
-  document_ref: string;
-  supplier_ruc: string;
-  status: SIREComparisonStatus;
-  portal_total?: number;
-  sire_total?: number;
-  message: string;
+  currency: string;
 }
 
 export interface SIREComparisonResult {
   period: string;
-  total_portal_invoices: number;
-  total_sire_proposals: number;
+  sire_records_count: number;
+  factumflux_invoices_count: number;
   matched_count: number;
-  missing_in_portal_count: number;
-  missing_in_sire_count: number;
-  items: SIREDiscrepancyItem[];
-  compared_at: string;
+  missing_in_factumflux: number;
+  missing_in_sire: number;
+  discrepancies: Array<{
+    document_number: string;
+    supplier_ruc: string;
+    issue_date: string;
+    sire_amount?: number;
+    factumflux_amount?: number;
+    difference?: number;
+    issue_type: 'MISSING_IN_LOCAL' | 'MISSING_IN_SIRE' | 'AMOUNT_MISMATCH';
+  }>;
+}
+
+// Operational Flow Enhancements (Phase 6)
+export interface POReceptionStatusResponse {
+  po_number: string;
+  order_type: 'BIEN' | 'SERVICIO';
+  currency: string;
+  total_amount: number;
+  has_reception: boolean;
+  can_upload_invoice: boolean;
+  message: string;
+  goods_receipts?: Array<{
+    id: string;
+    gr_number: string;
+    movement_type: string;
+    receipt_date: string;
+    total_received: number;
+  }>;
+  service_entry_sheets?: Array<{
+    id: string;
+    sheet_number: string;
+    service_description: string;
+    accepted_amount: number;
+    approved_at: string;
+    status: string;
+  }>;
+}
+
+export interface SupplierContact {
+  id: string;
+  supplier_id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  role: string;
+  is_primary: boolean;
+  created_at: string;
+}
+
+export interface SupplierNotificationSettings {
+  supplier_id: string;
+  email_notifications_enabled: boolean;
+  whatsapp_notifications_enabled: boolean;
+  notification_emails: string[];
+}
+
+export interface SupplierBankAccount {
+  id: string;
+  bank_name: string;
+  account_number: string;
+  cci?: string;
+  currency: string;
+  account_type: string;
+  is_primary: boolean;
+}
+
+export interface SupplierProfileResponse {
+  id: string;
+  ruc: string;
+  legal_name: string;
+  sunat_status: string;
+  sunat_condition: string;
+  is_verified: boolean;
+  contacts: SupplierContact[];
+  notification_settings: SupplierNotificationSettings;
+  bank_accounts: SupplierBankAccount[];
+}
+
+export interface SupplierDashboardStats {
+  total_invoices_count: number;
+  total_amount_billed: number;
+  currency: string;
+  invoices_enviado: number;
+  invoices_en_revision: number;
+  invoices_procesada: number;
+  pending_payment_amount: number;
+  paid_amount: number;
+  next_payment_scheduled_date?: string;
+}
+
+export interface ClientDashboardStats {
+  month: string;
+  total_received_invoices: number;
+  total_received_amount: number;
+  currency: string;
+  matched_count: number;
+  match_ratio_pct: number;
+  observed_count: number;
+  pending_payment_amount: number;
+  paid_amount_month: number;
+  negotiable_risk_count: number;
 }
 
 export class FactumfluxClient {
@@ -296,9 +352,13 @@ export class FactumfluxClient {
     this.tenantId = tenantId;
   }
 
+  setToken(token: string) {
+    this.token = token;
+  }
+
   private async fetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+    const url = `${this.baseUrl}${path}`;
     const headers: Record<string, string> = {
-      Accept: 'application/json',
       ...(options.headers as Record<string, string>),
     };
 
@@ -309,30 +369,29 @@ export class FactumfluxClient {
     if (this.tenantId) {
       headers['X-Tenant-Id'] = this.tenantId;
     }
+
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      ...options,
-      headers,
-    });
+    const response = await fetch(url, { ...options, headers });
 
     if (!response.ok) {
-      const errorBody = await response.text();
-      throw new Error(`API error ${response.status}: ${errorBody}`);
+      let errorMsg = `HTTP Error ${response.status}: ${response.statusText}`;
+      try {
+        const errorJson = await response.json();
+        errorMsg = errorJson.error || errorJson.message || errorMsg;
+      } catch {
+        // Fallback to text
+      }
+      throw new Error(errorMsg);
     }
 
-    return response.json();
+    return response.json() as Promise<T>;
   }
 
-  // Health
-  async getHealth(): Promise<{ status: string }> {
-    return this.fetch('/healthz');
-  }
-
-  // SuperAdmin Platform Operations
-  async getPlatformStats(): Promise<PlatformStats> {
+  // SuperAdmin endpoints
+  async getSuperAdminStats(): Promise<PlatformStats> {
     return this.fetch('/api/admin/stats');
   }
 
@@ -347,14 +406,14 @@ export class FactumfluxClient {
     });
   }
 
-  async updateTenantStatus(tenantId: string, status: string): Promise<{ status: string }> {
+  async updateTenantStatus(tenantId: string, status: 'active' | 'suspended' | 'trial'): Promise<TenantSummary> {
     return this.fetch(`/api/admin/tenants/${tenantId}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     });
   }
 
-  async listCommercialPlans(): Promise<CommercialPlan[]> {
+  async listPlans(): Promise<CommercialPlan[]> {
     return this.fetch('/api/admin/plans');
   }
 
@@ -362,49 +421,44 @@ export class FactumfluxClient {
     return this.fetch('/api/admin/jit-sessions');
   }
 
-  async createJITSession(data: { target_tenant_id: string; requester_email: string; reason: string; duration_hours: number }): Promise<JITSupportSession> {
+  async createJITSession(req: JITSessionRequest): Promise<JITSupportSession> {
     return this.fetch('/api/admin/jit-sessions', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(req),
     });
   }
 
-  async listAuditEvents(limit = 50): Promise<AuditEvent[]> {
-    return this.fetch(`/api/admin/audit-logs?limit=${limit}`);
+  async listAuditLogs(): Promise<AuditEvent[]> {
+    return this.fetch('/api/admin/audit-logs');
   }
 
-  // BackOffice & Supplier Invoices
-  async listBackofficeInvoices(): Promise<InvoiceSummary[]> {
+  // BackOffice Client endpoints
+  async getClientDashboard(): Promise<ClientDashboardStats> {
+    return this.fetch('/api/v1/backoffice/dashboard');
+  }
+
+  async listInvoices(): Promise<InvoiceSummary[]> {
     return this.fetch('/api/v1/backoffice/invoices');
   }
 
-  async listSupplierInvoices(): Promise<InvoiceSummary[]> {
-    return this.fetch('/api/v1/supplier/invoices');
-  }
-
-  async uploadSupplierInvoiceXML(file: File): Promise<InvoiceSummary> {
-    const formData = new FormData();
-    formData.append('xml_file', file);
-    return this.fetch('/api/v1/supplier/invoices/upload', {
-      method: 'POST',
-      body: formData,
-    });
-  }
-
-  // BackOffice Matching & Fiscal operations
-  async validateInvoiceSUNAT(invoiceId: string): Promise<FiscalValidationResult> {
+  async validateSUNAT(invoiceId: string): Promise<any> {
     return this.fetch(`/api/v1/backoffice/invoices/${invoiceId}/validate-sunat`, {
       method: 'POST',
     });
   }
 
-  async runInvoiceMatch(invoiceId: string): Promise<MatchingResult> {
+  async runMatch(invoiceId: string): Promise<any> {
     return this.fetch(`/api/v1/backoffice/invoices/${invoiceId}/match`, {
       method: 'POST',
     });
   }
 
-  // ERP Purchase Orders & Receipts Ingest
+  async postToSAP(invoiceId: string): Promise<any> {
+    return this.fetch(`/api/v1/backoffice/invoices/${invoiceId}/post-to-sap`, {
+      method: 'POST',
+    });
+  }
+
   async listPurchaseOrders(): Promise<PurchaseOrder[]> {
     return this.fetch('/api/v1/backoffice/purchase-orders');
   }
@@ -436,25 +490,15 @@ export class FactumfluxClient {
     });
   }
 
-  // SAP S/4HANA OData posting
-  async postInvoiceToSAP(invoiceId: string): Promise<ERPInvoiceConfirmation> {
-    return this.fetch(`/api/v1/backoffice/invoices/${invoiceId}/post-to-sap`, {
-      method: 'POST',
-    });
-  }
-
-  // Factura Negociable 8-day deadline alerts
-  async listNegotiableAlerts(): Promise<NegotiableAlert[]> {
+  async listNegotiableAlerts(): Promise<NegotiableAlertItem[]> {
     return this.fetch('/api/v1/backoffice/invoices/negotiable-alerts');
   }
 
-  // SUNAT SIRE reconciliation cross-check
   async compareSIRE(period?: string): Promise<SIREComparisonResult> {
     const query = period ? `?period=${encodeURIComponent(period)}` : '';
     return this.fetch(`/api/v1/backoffice/sire/compare${query}`);
   }
 
-  // Tenant Matching Policies & Dynamic CEL Rules
   async getTenantPolicy(): Promise<TenantPolicy> {
     return this.fetch('/api/v1/backoffice/policies');
   }
@@ -466,7 +510,84 @@ export class FactumfluxClient {
     });
   }
 
-  // Phase 5: Factoring, CAVALI & Supplier Liquidity
+  // Supplier Portal endpoints
+  async getSupplierDashboard(): Promise<SupplierDashboardStats> {
+    return this.fetch('/api/v1/supplier/dashboard');
+  }
+
+  async listSupplierInvoices(): Promise<InvoiceSummary[]> {
+    return this.fetch('/api/v1/supplier/invoices');
+  }
+
+  async checkPOReceptionStatus(poNumber: string): Promise<POReceptionStatusResponse> {
+    return this.fetch(`/api/v1/supplier/orders/${encodeURIComponent(poNumber)}/reception-status`);
+  }
+
+  async uploadInvoiceXML(file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append('xml_file', file);
+    return this.fetch('/api/v1/supplier/invoices/upload', {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
+  async uploadInvoiceMultipart(formData: FormData): Promise<any> {
+    return this.fetch('/api/v1/supplier/invoices/upload', {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
+  async getSupplierProfile(): Promise<SupplierProfileResponse> {
+    return this.fetch('/api/v1/supplier/profile');
+  }
+
+  async updateSupplierNotifications(settings: {
+    email_notifications_enabled: boolean;
+    whatsapp_notifications_enabled: boolean;
+    notification_emails: string[];
+  }): Promise<{ message: string }> {
+    return this.fetch('/api/v1/supplier/notifications', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+  }
+
+  async addSupplierContact(contact: {
+    name: string;
+    email: string;
+    phone?: string;
+    role?: string;
+    is_primary?: boolean;
+  }): Promise<SupplierContact> {
+    return this.fetch('/api/v1/supplier/contacts', {
+      method: 'POST',
+      body: JSON.stringify(contact),
+    });
+  }
+
+  async deleteSupplierContact(contactId: string): Promise<{ message: string }> {
+    return this.fetch(`/api/v1/supplier/contacts/${contactId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async addSupplierBankAccount(account: {
+    bank_name: string;
+    account_number: string;
+    cci?: string;
+    currency: string;
+    account_type: string;
+    is_primary?: boolean;
+  }): Promise<SupplierBankAccount> {
+    return this.fetch('/api/v1/supplier/bank-accounts', {
+      method: 'POST',
+      body: JSON.stringify(account),
+    });
+  }
+
+  // Factoring & Cavali
   async getFactoringQuote(amount: number, days?: number): Promise<FactoringQuote> {
     const query = days ? `?amount=${amount}&days=${days}` : `?amount=${amount}`;
     return this.fetch(`/api/v1/supplier/factoring/quote${query}`);
@@ -496,7 +617,6 @@ export class FactumfluxClient {
     });
   }
 
-  // Phase 5: Supplier Reliability Scoring & Ranking
   async listSupplierRankings(): Promise<SupplierRankingItem[]> {
     return this.fetch('/api/v1/backoffice/suppliers/rankings');
   }
@@ -507,7 +627,6 @@ export class FactumfluxClient {
     });
   }
 
-  // Phase 5: WhatsApp Self-Service Bot Simulator
   async simulateWhatsApp(phoneNumber: string, message: string): Promise<WhatsAppSimulationResponse> {
     return this.fetch('/api/v1/whatsapp/simulate', {
       method: 'POST',
@@ -515,4 +634,3 @@ export class FactumfluxClient {
     });
   }
 }
-
