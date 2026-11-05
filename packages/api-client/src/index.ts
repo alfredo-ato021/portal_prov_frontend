@@ -419,10 +419,39 @@ export class FactumfluxClient {
     });
   }
 
+  async clientLogin(ruc: string, email: string, password: string): Promise<{
+    success: boolean;
+    token: string;
+    tenant_id: string;
+    tenant_name: string;
+    tenant_ruc: string;
+    user: any;
+  }> {
+    return this.fetch('/api/v1/auth/client-login', {
+      method: 'POST',
+      body: JSON.stringify({ ruc, email, password }),
+    });
+  }
+
   async updateTenantStatus(tenantId: string, status: 'active' | 'suspended' | 'trial'): Promise<TenantSummary> {
     return this.fetch(`/api/admin/tenants/${tenantId}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
+    });
+  }
+
+  async updateTenantDetails(
+    tenantId: string,
+    data: {
+      name?: string;
+      plan_code?: string;
+      status?: 'active' | 'suspended';
+      plan_expires_at?: string;
+    }
+  ): Promise<TenantSummary> {
+    return this.fetch(`/api/admin/tenants/${tenantId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
     });
   }
 

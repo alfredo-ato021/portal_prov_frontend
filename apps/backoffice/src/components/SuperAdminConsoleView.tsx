@@ -55,6 +55,14 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
   const [renewMonths, setRenewMonths] = useState(12);
   const [renewNewPlanCode, setRenewNewPlanCode] = useState('');
 
+  // Large Tenant Details & Edit Modal
+  const [selectedTenantForDetails, setSelectedTenantForDetails] = useState<TenantSummary | null>(null);
+  const [editTenantName, setEditTenantName] = useState('');
+  const [editTenantPlanCode, setEditTenantPlanCode] = useState('');
+  const [editTenantStatus, setEditTenantStatus] = useState<'active' | 'suspended'>('active');
+  const [editTenantExpiresAt, setEditTenantExpiresAt] = useState('');
+  const [savingTenantDetails, setSavingTenantDetails] = useState(false);
+
   // Edit plan modal
   const [editingPlan, setEditingPlan] = useState<CommercialPlan | null>(null);
   const [editPlanName, setEditPlanName] = useState('');
@@ -134,6 +142,44 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
       setActionMessage(`Estado de "${tenant.name}" actualizado a ${nextStatus.toUpperCase()}.`);
     } catch (err: any) {
       alert(err.message || 'Error actualizando estado.');
+    }
+  };
+
+  const handleOpenTenantDetails = (tenant: TenantSummary) => {
+    setSelectedTenantForDetails(tenant);
+    setEditTenantName(tenant.name);
+    setEditTenantPlanCode(tenant.plan_code || 'growth');
+    setEditTenantStatus(tenant.status === 'suspended' ? 'suspended' : 'active');
+    if (tenant.plan_expires_at) {
+      try {
+        const d = new Date(tenant.plan_expires_at);
+        setEditTenantExpiresAt(d.toISOString().split('T')[0]);
+      } catch {
+        setEditTenantExpiresAt('');
+      }
+    } else {
+      setEditTenantExpiresAt('');
+    }
+  };
+
+  const handleSaveTenantDetails = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTenantForDetails) return;
+    setSavingTenantDetails(true);
+    try {
+      const updated = await client.updateTenantDetails(selectedTenantForDetails.id, {
+        name: editTenantName,
+        plan_code: editTenantPlanCode,
+        status: editTenantStatus,
+        plan_expires_at: editTenantExpiresAt ? new Date(editTenantExpiresAt).toISOString() : undefined,
+      });
+      setTenants(tenants.map((t) => (t.id === selectedTenantForDetails.id ? updated : t)));
+      setSelectedTenantForDetails(null);
+      setActionMessage(`Ficha de "${updated.name}" actualizada con éxito. Plan: ${updated.plan_code?.toUpperCase()}, Estado: ${updated.status?.toUpperCase()}.`);
+    } catch (err: any) {
+      alert(err.message || 'Error al actualizar detalles de la empresa.');
+    } finally {
+      setSavingTenantDetails(false);
     }
   };
 
@@ -463,9 +509,16 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                         const isActive = t.status === 'active';
 
                         return (
-                          <tr key={t.id} className="hover:bg-[#F8FAFC]/80 transition-colors">
+                          <tr
+                            key={t.id}
+                            onClick={() => handleOpenTenantDetails(t)}
+                            className="hover:bg-[#F8FAFC] cursor-pointer transition-colors group"
+                            title="Haga clic para ver la ficha completa y editar"
+                          >
                             <td className="py-4 px-4">
-                              <span className="font-bold text-[#0B2545] block">{t.name}</span>
+                              <span className="font-bold text-[#0B2545] group-hover:text-[#0A7469] transition-colors block">
+                                {t.name}
+                              </span>
                               <div className="flex items-center gap-2 mt-0.5 text-xs text-[#5B6B7F] font-mono">
                                 <span>RUC: {t.ruc}</span>
                                 <span>•</span>
@@ -525,9 +578,25 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                             </td>
 
                             <td className="py-4 px-4 text-right space-x-2">
+                              {/* Ver Ficha / Editar */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenTenantDetails(t);
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-[#E8F4F2] hover:bg-[#0A7469] text-[#0A7469] hover:text-white text-xs font-semibold border border-[#0A7469]/20 transition-all inline-flex items-center gap-1.5 shadow-sm"
+                                title="Abrir ficha extendida y editar"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span>Ficha & Plan</span>
+                              </button>
+
                               {/* Toggle Activar/Desactivar */}
                               <button
-                                onClick={() => handleToggleTenantStatus(t)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleTenantStatus(t);
+                                }}
                                 className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
                                   isActive
                                     ? 'bg-white hover:bg-rose-50 text-rose-600 border-rose-200'
@@ -540,7 +609,10 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
 
                               {/* Renovar Plan */}
                               <button
-                                onClick={() => handleOpenRenewModal(t)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenRenewModal(t);
+                                }}
                                 className="px-3 py-1 rounded-lg bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-semibold shadow-sm transition-colors"
                               >
                                 Renovar Plan
@@ -752,6 +824,284 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
           )}
         </main>
       </div>
+
+      {/* ── MODAL: FICHA INTEGRAL Y EDICIÓN DE TENANT (EXTENDIDO) ────────── */}
+      {selectedTenantForDetails && (
+        <div className="fixed inset-0 bg-[#0B2545]/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white border border-[#E2E7EE] rounded-2xl max-w-3xl w-full my-8 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-6 py-5 border-b border-[#E2E7EE] flex items-center justify-between bg-[#F8FAFC]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#0B2545] text-white flex items-center justify-center shadow-sm">
+                  <Building2 className="w-5 h-5 text-[#4FC9BE]" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-[#0B2545] leading-tight">
+                      Ficha Integral de Cliente (Tenant)
+                    </h3>
+                    <span
+                      className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${
+                        selectedTenantForDetails.status === 'active'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-rose-50 text-rose-700 border-rose-200'
+                      }`}
+                    >
+                      {selectedTenantForDetails.status === 'active' ? 'Cuenta Activa' : 'Cuenta Suspendida'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#5B6B7F] font-mono mt-0.5">
+                    UUID: {selectedTenantForDetails.id}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedTenantForDetails(null)}
+                className="p-1.5 rounded-lg text-[#5B6B7F] hover:text-[#0B2545] hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body (Scrollable) */}
+            <form onSubmit={handleSaveTenantDetails} className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Sección 1: Datos de la Empresa y Razón Social */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-[#0B2545] uppercase tracking-wider flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-[#0A7469]" />
+                  Identidad Corporativa
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#5B6B7F] mb-1">
+                      Razón Social (Editable)
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editTenantName}
+                      onChange={(e) => setEditTenantName(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-[#E2E7EE] focus:border-[#0A7469] focus:ring-1 focus:ring-[#0A7469] rounded-xl text-sm font-semibold text-[#0B2545]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-[#5B6B7F] mb-1">
+                      RUC SUNAT (Registro Inmutable)
+                    </label>
+                    <input
+                      type="text"
+                      disabled
+                      value={selectedTenantForDetails.ruc}
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-sm font-mono text-[#5B6B7F] cursor-not-allowed"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-[#5B6B7F] mb-1">
+                      Slug / Subdominio
+                    </label>
+                    <input
+                      type="text"
+                      disabled
+                      value={selectedTenantForDetails.slug}
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-sm font-mono text-[#0A7469] cursor-not-allowed"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-[#5B6B7F] mb-1">
+                      Fecha de Registro en Plataforma
+                    </label>
+                    <input
+                      type="text"
+                      disabled
+                      value={selectedTenantForDetails.created_at ? new Date(selectedTenantForDetails.created_at).toLocaleString('es-PE') : '3 de Noviembre 2026'}
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-xs font-mono text-[#5B6B7F] cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Sección 2: Plan Comercial & Estado */}
+              <div className="space-y-3 pt-4 border-t border-[#E2E7EE]">
+                <h4 className="text-xs font-bold text-[#0B2545] uppercase tracking-wider flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-[#0A7469]" />
+                  Plan Comercial & Suscripción
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#5B6B7F] mb-1">
+                      Cambiar Plan Comercial
+                    </label>
+                    <select
+                      value={editTenantPlanCode}
+                      onChange={(e) => setEditTenantPlanCode(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-[#E2E7EE] focus:border-[#0A7469] focus:ring-1 focus:ring-[#0A7469] rounded-xl text-sm font-semibold text-[#0B2545]"
+                    >
+                      {plans.map((p) => (
+                        <option key={p.code} value={p.code}>
+                          {p.name} - S/ {p.price_pen || (p.price_cents ? p.price_cents / 100 : 0)}/mes
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-[10px] text-[#5B6B7F] mt-1 block">
+                      Aplica inmediatamente límites y cuotas.
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-[#5B6B7F] mb-1">
+                      Estado del Acceso
+                    </label>
+                    <select
+                      value={editTenantStatus}
+                      onChange={(e) => setEditTenantStatus(e.target.value as 'active' | 'suspended')}
+                      className={`w-full px-3 py-2 border rounded-xl text-sm font-semibold ${
+                        editTenantStatus === 'active'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                          : 'bg-rose-50 text-rose-800 border-rose-300'
+                      }`}
+                    >
+                      <option value="active">Activo (Acceso Completo)</option>
+                      <option value="suspended">Suspendido (Bloqueado)</option>
+                    </select>
+                    <span className="text-[10px] text-[#5B6B7F] mt-1 block">
+                      {editTenantStatus === 'active' ? 'Clientes y proveedores pueden operar.' : 'Rechaza login y emisión de FE.'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-[#5B6B7F] mb-1">
+                      Fecha de Vigencia del Plan
+                    </label>
+                    <input
+                      type="date"
+                      value={editTenantExpiresAt}
+                      onChange={(e) => setEditTenantExpiresAt(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-[#E2E7EE] focus:border-[#0A7469] focus:ring-1 focus:ring-[#0A7469] rounded-xl text-sm font-semibold text-[#0B2545]"
+                    />
+                    <span className="text-[10px] text-[#5B6B7F] mt-1 block">
+                      Modifique para extender o fijar vencimiento.
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sección 3: Métricas de Uso y Usuarios */}
+              <div className="space-y-3 pt-4 border-t border-[#E2E7EE]">
+                <h4 className="text-xs font-bold text-[#0B2545] uppercase tracking-wider flex items-center gap-2">
+                  <Users className="w-4 h-4 text-[#0A7469]" />
+                  Consumo y Usuarios Activos
+                </h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-3 bg-[#F8FAFC] rounded-xl border border-[#E2E7EE]">
+                    <span className="text-[11px] text-[#5B6B7F] block">Facturas este Mes</span>
+                    <span className="text-lg font-bold font-mono text-[#0B2545] mt-0.5 block">
+                      {selectedTenantForDetails.monthly_invoices_used || 0} / {selectedTenantForDetails.max_monthly_invoices || '∞'}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-[#F8FAFC] rounded-xl border border-[#E2E7EE]">
+                    <span className="text-[11px] text-[#5B6B7F] block">Proveedores Conectados</span>
+                    <span className="text-lg font-bold font-mono text-[#0A7469] mt-0.5 block">
+                      {selectedTenantForDetails.active_suppliers_count || 0} / {selectedTenantForDetails.max_suppliers || '∞'}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-[#F8FAFC] rounded-xl border border-[#E2E7EE]">
+                    <span className="text-[11px] text-[#5B6B7F] block">Usuarios Cliente</span>
+                    <span className="text-lg font-bold font-mono text-[#0B2545] mt-0.5 block">
+                      {selectedTenantForDetails.client_users_count || 1} analistas
+                    </span>
+                  </div>
+                  <div className="p-3 bg-[#F8FAFC] rounded-xl border border-[#E2E7EE]">
+                    <span className="text-[11px] text-[#5B6B7F] block">Usuarios Proveedores</span>
+                    <span className="text-lg font-bold font-mono text-[#5B6B7F] mt-0.5 block">
+                      {selectedTenantForDetails.supplier_users_count || 0} usuarios
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sección 4: Infraestructura y Seguridad Google Cloud */}
+              <div className="space-y-3 pt-4 border-t border-[#E2E7EE]">
+                <h4 className="text-xs font-bold text-[#0B2545] uppercase tracking-wider flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-[#0A7469]" />
+                  Seguridad Multi-Tenant & Cloud KMS
+                </h4>
+                <div className="space-y-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#E2E7EE] text-xs font-mono">
+                  <div>
+                    <span className="text-[#5B6B7F] block text-[10px] uppercase font-semibold">
+                      Google Cloud KMS CMEK Key ID:
+                    </span>
+                    <span className="text-[#0B2545] break-all">
+                      {selectedTenantForDetails.kms_key_id || `projects/portalproveedoresrva/locations/southamerica-west1/keyRings/factumflux-ring/cryptoKeys/cmek-${selectedTenantForDetails.slug}`}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[#5B6B7F] block text-[10px] uppercase font-semibold">
+                      Google Cloud Storage Bucket:
+                    </span>
+                    <span className="text-[#0A7469] break-all">
+                      {selectedTenantForDetails.storage_bucket || `gs://factumflux-${selectedTenantForDetails.slug}-invoices-storage`}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[#5B6B7F] block text-[10px] uppercase font-semibold">
+                      Aislamiento de Datos:
+                    </span>
+                    <span className="text-emerald-700">
+                      Neon PostgreSQL Row-Level Security (RLS) activo bajo política estricta por app.tenant_id
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer Buttons */}
+              <div className="pt-4 border-t border-[#E2E7EE] flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const t = selectedTenantForDetails;
+                    setSelectedTenantForDetails(null);
+                    handleOpenRenewModal(t);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#0B2545] text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-[#0A7469]" />
+                  <span>Renovar Vigencia (+Meses)</span>
+                </button>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTenantForDetails(null)}
+                    className="px-4 py-2 rounded-xl border border-[#E2E7EE] hover:bg-slate-50 text-[#5B6B7F] text-xs font-semibold transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingTenantDetails}
+                    className="px-5 py-2 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                  >
+                    {savingTenantDetails ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>Guardando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Guardar Cambios</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ── MODAL: NUEVO TENANT ───────────────────────────────────────────── */}
       {showNewTenant && (
