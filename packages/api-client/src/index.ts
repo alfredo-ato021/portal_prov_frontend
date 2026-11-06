@@ -138,6 +138,34 @@ export interface CreateTenantRequest {
   slug: string;
   ruc: string;
   plan_code: string;
+  admin_email?: string;
+  admin_full_name?: string;
+  admin_password?: string;
+}
+
+export interface TenantUserItem {
+  id: string;
+  tenant_id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+  last_login_at?: string;
+}
+
+export interface CreateTenantUserRequest {
+  email: string;
+  full_name: string;
+  role?: string;
+  password?: string;
+}
+
+export interface ResetUserPasswordResponse {
+  user_id: string;
+  email: string;
+  new_password: string;
+  message: string;
 }
 
 export interface InvoiceSummary {
@@ -459,6 +487,31 @@ export class FactumfluxClient {
     return this.fetch(`/api/admin/tenants/${tenantId}/renew`, {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  }
+
+  async listTenantUsers(tenantId: string): Promise<TenantUserItem[]> {
+    return this.fetch(`/api/admin/tenants/${tenantId}/users`);
+  }
+
+  async createTenantUser(tenantId: string, data: CreateTenantUserRequest): Promise<TenantUserItem> {
+    return this.fetch(`/api/admin/tenants/${tenantId}/users`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async resetTenantUserPassword(tenantId: string, userId: string, newPassword?: string): Promise<ResetUserPasswordResponse> {
+    return this.fetch(`/api/admin/tenants/${tenantId}/users/${userId}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ new_password: newPassword }),
+    });
+  }
+
+  async toggleTenantUserStatus(tenantId: string, userId: string, isActive: boolean): Promise<{ success: boolean }> {
+    return this.fetch(`/api/admin/tenants/${tenantId}/users/${userId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active: isActive }),
     });
   }
 

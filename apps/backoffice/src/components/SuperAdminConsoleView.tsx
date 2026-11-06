@@ -15,6 +15,11 @@ import {
   ShieldCheck,
   X,
   Lock,
+  Copy,
+  Check,
+  UserPlus,
+  UserCheck,
+  UserX,
 } from 'lucide-react';
 import {
   FactumfluxClient,
@@ -23,6 +28,7 @@ import {
   CommercialPlan,
   JITSupportSession,
   AuditEvent,
+  TenantUserItem,
 } from '@factumflux/api-client';
 
 interface SuperAdminConsoleViewProps {
@@ -49,6 +55,9 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
   const [newTenantSlug, setNewTenantSlug] = useState('');
   const [newTenantRuc, setNewTenantRuc] = useState('');
   const [newTenantPlan, setNewTenantPlan] = useState('growth');
+  const [newTenantAdminEmail, setNewTenantAdminEmail] = useState('');
+  const [newTenantAdminName, setNewTenantAdminName] = useState('');
+  const [newTenantAdminPassword, setNewTenantAdminPassword] = useState('');
 
   // Renew tenant plan modal
   const [renewingTenant, setRenewingTenant] = useState<TenantSummary | null>(null);
@@ -62,6 +71,22 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
   const [editTenantStatus, setEditTenantStatus] = useState<'active' | 'suspended'>('active');
   const [editTenantExpiresAt, setEditTenantExpiresAt] = useState('');
   const [savingTenantDetails, setSavingTenantDetails] = useState(false);
+
+  // Tenant Users & Credentials state
+  const [tenantUsers, setTenantUsers] = useState<TenantUserItem[]>([]);
+  const [loadingTenantUsers, setLoadingTenantUsers] = useState(false);
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserFullName, setNewUserFullName] = useState('');
+  const [newUserRole, setNewUserRole] = useState('admin');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [credentialNotice, setCredentialNotice] = useState<{
+    email: string;
+    pass: string;
+    title: string;
+    ruc?: string;
+  } | null>(null);
+  const [copiedCredential, setCopiedCredential] = useState(false);
 
   // Edit plan modal
   const [editingPlan, setEditingPlan] = useState<CommercialPlan | null>(null);
@@ -113,13 +138,29 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
         slug: newTenantSlug,
         ruc: newTenantRuc,
         plan_code: newTenantPlan,
+        admin_email: newTenantAdminEmail || undefined,
+        admin_full_name: newTenantAdminName || undefined,
+        admin_password: newTenantAdminPassword || undefined,
       });
       setTenants([created, ...tenants]);
       setShowNewTenant(false);
+
+      if (newTenantAdminEmail) {
+        setCredentialNotice({
+          title: 'Empresa y Usuario Administrador Creados',
+          email: newTenantAdminEmail,
+          pass: newTenantAdminPassword || '(Contraseña asignada)',
+          ruc: newTenantRuc,
+        });
+      }
+
       setNewTenantName('');
       setNewTenantSlug('');
       setNewTenantRuc('');
-      setActionMessage(`Empresa "${created.name}" creada exitosamente con CMEK KMS.`);
+      setNewTenantAdminEmail('');
+      setNewTenantAdminName('');
+      setNewTenantAdminPassword('');
+      setActionMessage(`Empresa "${created.name}" creada exitosamente con CMEK KMS y acceso BackOffice.`);
     } catch (err: any) {
       alert(err.message || 'Error al crear tenant.');
     }
@@ -145,11 +186,25 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
     }
   };
 
+  const loadTenantUsers = async (tenantId: string) => {
+    setLoadingTenantUsers(true);
+    try {
+      const users = await client.listTenantUsers(tenantId);
+      setTenantUsers(users || []);
+    } catch (err) {
+      console.error('Error fetching tenant users', err);
+      setTenantUsers([]);
+    } finally {
+      setLoadingTenantUsers(false);
+    }
+  };
+
   const handleOpenTenantDetails = (tenant: TenantSummary) => {
     setSelectedTenantForDetails(tenant);
     setEditTenantName(tenant.name);
     setEditTenantPlanCode(tenant.plan_code || 'growth');
     setEditTenantStatus(tenant.status === 'suspended' ? 'suspended' : 'active');
+    loadTenantUsers(tenant.id);
     if (tenant.plan_expires_at) {
       try {
         const d = new Date(tenant.plan_expires_at);
@@ -160,6 +215,75 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
     } else {
       setEditTenantExpiresAt('');
     }
+  };
+
+  const handleCreateTenantUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTenantForDetails) return;
+    try {
+      const assignedPass = newUserPassword || Math.random().toString(36).slice(-8) + 'X#9';
+      await client.createTenantUser(selectedTenantForDetails.id, {
+        email: newUserEmail,
+        full_name: newUserFullName,
+        role: newUserRole,
+        password: assignedPass,
+      });
+      setShowAddUserModal(false);
+      setNewUserEmail('');
+      setNewUserFullName('');
+      setNewUserPassword('');
+      await loadTenantUsers(selectedTenantForDetails.id);
+      setCredentialNotice({
+        title: 'Usuario Creado Exitosamente',
+        email: newUserEmail,
+        pass: assignedPass,
+        ruc: selectedTenantForDetails.ruc,
+      });
+    } catch (err: any) {
+      alert(err.message || 'Error al crear usuario para el cliente.');
+    }
+  };
+
+  const handleResetUserPassword = async (user: TenantUserItem) => {
+    if (!selectedTenantForDetails) return;
+    const confirm = window.confirm(
+      `¿Desea regenerar la contraseña para ${user.email}? La credencial anterior será invalidada inmediatamente.`
+    );
+    if (!confirm) return;
+
+    try {
+      const res = await client.resetTenantUserPassword(selectedTenantForDetails.id, user.id);
+      setCredentialNotice({
+        title: 'Contraseña Regenerada con Éxito',
+        email: user.email,
+        pass: res.new_password,
+        ruc: selectedTenantForDetails.ruc,
+      });
+    } catch (err: any) {
+      alert(err.message || 'Error al regenerar contraseña.');
+    }
+  };
+
+  const handleToggleUserStatus = async (user: TenantUserItem) => {
+    if (!selectedTenantForDetails) return;
+    const nextState = !user.is_active;
+    try {
+      await client.toggleTenantUserStatus(selectedTenantForDetails.id, user.id, nextState);
+      setTenantUsers(
+        tenantUsers.map((u) => (u.id === user.id ? { ...u, is_active: nextState } : u))
+      );
+      setActionMessage(
+        `Usuario ${user.email} ${nextState ? 'activado' : 'desactivado'} correctamente.`
+      );
+    } catch (err: any) {
+      alert(err.message || 'Error al modificar estado del usuario.');
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedCredential(true);
+    setTimeout(() => setCopiedCredential(false), 2500);
   };
 
   const handleSaveTenantDetails = async (e: React.FormEvent) => {
@@ -438,7 +562,7 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
         <main className="flex-1 overflow-y-auto p-8">
           {/* ── TAB: EMPRESAS / TENANTS ───────────────────────────────────── */}
           {activeTab === 'tenants' && (
-            <div className="space-y-6 max-w-7xl">
+            <div className="space-y-6 w-full max-w-full">
               {/* Header con botón para nuevo tenant */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
@@ -494,7 +618,7 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-sm">
                     <thead>
-                      <tr className="border-b border-[#E2E7EE] bg-[#F8FAFC] text-[#5B6B7F] text-xs uppercase tracking-wider font-semibold">
+                      <tr className="border-b border-[#E2E7EE] bg-[#F8FAFC] text-[#5B6B7F] text-xs uppercase tracking-wider font-semibold whitespace-nowrap">
                         <th className="py-3.5 px-4">Empresa / RUC</th>
                         <th className="py-3.5 px-4">Plan Actual</th>
                         <th className="py-3.5 px-4">Usuarios Conectados</th>
@@ -515,7 +639,7 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                             className="hover:bg-[#F8FAFC] cursor-pointer transition-colors group"
                             title="Haga clic para ver la ficha completa y editar"
                           >
-                            <td className="py-4 px-4">
+                            <td className="py-4 px-4 min-w-[220px]">
                               <span className="font-bold text-[#0B2545] group-hover:text-[#0A7469] transition-colors block">
                                 {t.name}
                               </span>
@@ -526,7 +650,7 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                               </div>
                             </td>
 
-                            <td className="py-4 px-4">
+                            <td className="py-4 px-4 whitespace-nowrap">
                               <span className="font-bold text-[#0B2545] text-xs block">
                                 {t.plan_name || t.plan_code.toUpperCase()}
                               </span>
@@ -535,7 +659,7 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                               </span>
                             </td>
 
-                            <td className="py-4 px-4 text-xs">
+                            <td className="py-4 px-4 text-xs whitespace-nowrap">
                               <div className="flex items-center gap-1.5 text-[#0B2545] font-medium">
                                 <Users className="w-3.5 h-3.5 text-[#0A7469]" />
                                 <span>Cliente: <strong>{t.client_users_count || 1}</strong> analistas</span>
@@ -545,7 +669,7 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                               </span>
                             </td>
 
-                            <td className="py-4 px-4 text-xs">
+                            <td className="py-4 px-4 text-xs whitespace-nowrap">
                               <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-semibold border ${expireInfo.color}`}>
                                 <Calendar className="w-3 h-3" />
                                 {expireInfo.label}
@@ -557,7 +681,7 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                               )}
                             </td>
 
-                            <td className="py-4 px-4">
+                            <td className="py-4 px-4 whitespace-nowrap">
                               <span
                                 className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
                                   isActive
@@ -577,7 +701,7 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                               </span>
                             </td>
 
-                            <td className="py-4 px-4 text-right space-x-2">
+                            <td className="py-4 px-4 text-right space-x-2 whitespace-nowrap">
                               {/* Ver Ficha / Editar */}
                               <button
                                 onClick={(e) => {
@@ -630,7 +754,7 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
 
           {/* ── TAB: PLANES COMERCIALES (EDITABLES) ───────────────────────── */}
           {activeTab === 'plans' && (
-            <div className="space-y-6 max-w-6xl">
+            <div className="space-y-6 w-full max-w-full">
               <div>
                 <h2 className="text-2xl font-bold text-[#0B2545] tracking-tight">
                   Planes Comerciales SaaS
@@ -708,7 +832,7 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
 
           {/* ── TAB: SOPORTE JIT PAM ──────────────────────────────────────── */}
           {activeTab === 'jit' && (
-            <div className="space-y-6 max-w-6xl">
+            <div className="space-y-6 w-full max-w-full">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <h2 className="text-2xl font-bold text-[#0B2545] tracking-tight">
@@ -772,7 +896,7 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
 
           {/* ── TAB: AUDITORÍA INMUTABLE SHA-256 ─────────────────────────── */}
           {activeTab === 'audit' && (
-            <div className="space-y-6 max-w-6xl">
+            <div className="space-y-6 w-full max-w-full">
               <div>
                 <h2 className="text-2xl font-bold text-[#0B2545] tracking-tight">
                   Registro de Auditoría SHA-256
@@ -828,7 +952,7 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
       {/* ── MODAL: FICHA INTEGRAL Y EDICIÓN DE TENANT (EXTENDIDO) ────────── */}
       {selectedTenantForDetails && (
         <div className="fixed inset-0 bg-[#0B2545]/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white border border-[#E2E7EE] rounded-2xl max-w-3xl w-full my-8 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+          <div className="bg-white border border-[#E2E7EE] rounded-2xl max-w-5xl w-full my-8 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
             {/* Modal Header */}
             <div className="px-6 py-5 border-b border-[#E2E7EE] flex items-center justify-between bg-[#F8FAFC]">
               <div className="flex items-center gap-3">
@@ -1056,6 +1180,127 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                 </div>
               </div>
 
+              {/* Sección 5: Usuarios y Credenciales del Cliente (Acceso BackOffice) */}
+              <div className="space-y-3 pt-4 border-t border-[#E2E7EE]">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-xs font-bold text-[#0B2545] uppercase tracking-wider flex items-center gap-2">
+                      <Users className="w-4 h-4 text-[#0A7469]" />
+                      Usuarios y Credenciales del Cliente (BackOffice)
+                    </h4>
+                    <p className="text-[11px] text-[#5B6B7F] mt-0.5">
+                      Cuentas de analistas y administradores asignadas a este tenant. Puede restablecer credenciales o crear nuevos accesos.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddUserModal(true);
+                      setNewUserEmail('');
+                      setNewUserFullName('');
+                      setNewUserRole('admin');
+                      setNewUserPassword('Factum@' + Math.random().toString(36).slice(-6) + '!');
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-semibold shadow-sm transition-colors self-start sm:self-auto"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>Nuevo Usuario</span>
+                  </button>
+                </div>
+
+                <div className="bg-[#F8FAFC] rounded-xl border border-[#E2E7EE] overflow-hidden">
+                  {loadingTenantUsers ? (
+                    <div className="p-8 text-center text-xs text-[#5B6B7F]">
+                      <RefreshCw className="w-4 h-4 animate-spin mx-auto mb-2 text-[#0A7469]" />
+                      Cargando usuarios del tenant...
+                    </div>
+                  ) : tenantUsers.length === 0 ? (
+                    <div className="p-6 text-center text-xs text-[#5B6B7F]">
+                      <p>No se encontraron usuarios asignados a esta empresa cliente.</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAddUserModal(true);
+                          setNewUserPassword('Factum@' + Math.random().toString(36).slice(-6) + '!');
+                        }}
+                        className="mt-2 text-[#0A7469] font-bold hover:underline"
+                      >
+                        Crear el primer usuario administrador
+                      </button>
+                    </div>
+                  ) : (
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-[#E2E7EE] bg-slate-100 text-[#5B6B7F] uppercase tracking-wider font-semibold whitespace-nowrap">
+                          <th className="py-2.5 px-3">Usuario / Email</th>
+                          <th className="py-2.5 px-3">Rol</th>
+                          <th className="py-2.5 px-3">Estado</th>
+                          <th className="py-2.5 px-3">Creado / Último Acceso</th>
+                          <th className="py-2.5 px-3 text-right">Acciones de Soporte</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#E2E7EE] bg-white">
+                        {tenantUsers.map((u) => (
+                          <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="py-3 px-3">
+                              <span className="font-bold text-[#0B2545] block">{u.full_name || 'Sin nombre'}</span>
+                              <span className="font-mono text-[11px] text-[#5B6B7F]">{u.email}</span>
+                            </td>
+                            <td className="py-3 px-3 whitespace-nowrap">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-700 border border-slate-200">
+                                {u.role || 'client'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 whitespace-nowrap">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                  u.is_active
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                }`}
+                              >
+                                {u.is_active ? <UserCheck className="w-3 h-3" /> : <UserX className="w-3 h-3" />}
+                                {u.is_active ? 'Activo' : 'Suspendido'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-[11px] text-[#5B6B7F] font-mono whitespace-nowrap">
+                              <div>{u.created_at ? new Date(u.created_at).toLocaleDateString('es-PE') : '-'}</div>
+                              {u.last_login_at && (
+                                <div className="text-[10px] text-emerald-600">
+                                  Login: {new Date(u.last_login_at).toLocaleDateString('es-PE')}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-3 px-3 text-right space-x-1.5 whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => handleResetUserPassword(u)}
+                                className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-semibold inline-flex items-center gap-1 transition-colors"
+                                title="Regenerar contraseña y entregar al cliente"
+                              >
+                                <Key className="w-3 h-3 text-amber-600" />
+                                <span>Regenerar Clave</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleUserStatus(u)}
+                                className={`px-2 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                                  u.is_active
+                                    ? 'bg-white hover:bg-rose-50 text-rose-600 border-rose-200'
+                                    : 'bg-white hover:bg-emerald-50 text-emerald-600 border-emerald-200'
+                                }`}
+                              >
+                                {u.is_active ? 'Desactivar' : 'Activar'}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+
               {/* Modal Footer Buttons */}
               <div className="pt-4 border-t border-[#E2E7EE] flex items-center justify-between">
                 <button
@@ -1105,9 +1350,9 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
 
       {/* ── MODAL: NUEVO TENANT ───────────────────────────────────────────── */}
       {showNewTenant && (
-        <div className="fixed inset-0 bg-[#0B2545]/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white border border-[#E2E7EE] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between">
+        <div className="fixed inset-0 bg-[#0B2545]/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white border border-[#E2E7EE] rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-xl max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-[#E2E7EE] pb-3">
               <h3 className="font-bold text-[#0B2545] flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-[#0A7469]" />
                 Aprovisionar Nueva Empresa (Tenant)
@@ -1117,60 +1362,123 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleCreateTenant} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-[#5B6B7F] font-semibold mb-1">Razón Social</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ej. Corporación Minera del Centro S.A.C."
-                  value={newTenantName}
-                  onChange={(e) => setNewTenantName(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
-                />
+            <form onSubmit={handleCreateTenant} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-[#5B6B7F] font-semibold mb-1">Razón Social</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej. Corporación Minera del Centro S.A.C."
+                    value={newTenantName}
+                    onChange={(e) => setNewTenantName(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[#5B6B7F] font-semibold mb-1">RUC SUNAT (11 dígitos)</label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={11}
+                    placeholder="20601234567"
+                    value={newTenantRuc}
+                    onChange={(e) => setNewTenantRuc(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[#5B6B7F] font-semibold mb-1">Slug Identificador</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ej. minera-centro"
+                    value={newTenantSlug}
+                    onChange={(e) => setNewTenantSlug(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-[#5B6B7F] font-semibold mb-1">Plan Comercial Contratado</label>
+                  <select
+                    value={newTenantPlan}
+                    onChange={(e) => setNewTenantPlan(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
+                  >
+                    {plans.map((p) => (
+                      <option key={p.code} value={p.code}>
+                        {p.name} - S/ {p.price_pen || (p.price_cents ? p.price_cents / 100 : 0)}/mes
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-[#5B6B7F] font-semibold mb-1">RUC (11 dígitos)</label>
-                <input
-                  type="text"
-                  required
-                  maxLength={11}
-                  placeholder="20601234567"
-                  value={newTenantRuc}
-                  onChange={(e) => setNewTenantRuc(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono"
-                />
+              {/* Credenciales de Acceso Administrador */}
+              <div className="pt-3 border-t border-[#E2E7EE] space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-[#0B2545] uppercase tracking-wider flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-[#0A7469]" />
+                    Usuario Administrador del Cliente (BackOffice)
+                  </span>
+                  <span className="text-[10px] text-[#5B6B7F]">Para inicio de sesión</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[#5B6B7F] font-semibold mb-1">Nombre Completo</label>
+                    <input
+                      type="text"
+                      placeholder="Ej. Juan Pérez (Admin)"
+                      value={newTenantAdminName}
+                      onChange={(e) => setNewTenantAdminName(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[#5B6B7F] font-semibold mb-1">Correo Electrónico (Login)</label>
+                    <input
+                      type="email"
+                      placeholder="Ej. admin@empresa.com"
+                      value={newTenantAdminEmail}
+                      onChange={(e) => setNewTenantAdminEmail(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[#5B6B7F] font-semibold">Contraseña Inicial</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const auto = 'Factum@' + Math.random().toString(36).slice(-6) + '!';
+                        setNewTenantAdminPassword(auto);
+                      }}
+                      className="text-[10px] text-[#0A7469] font-bold hover:underline"
+                    >
+                      Generar Contraseña Segura
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Ej. Factum@2026!"
+                    value={newTenantAdminPassword}
+                    onChange={(e) => setNewTenantAdminPassword(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono"
+                  />
+                  <span className="text-[10px] text-[#5B6B7F] mt-1 block">
+                    Podrá visualizar y copiar estas credenciales inmediatamente tras el aprovisionamiento.
+                  </span>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-[#5B6B7F] font-semibold mb-1">Slug Identificador</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="ej. minera-centro"
-                  value={newTenantSlug}
-                  onChange={(e) => setNewTenantSlug(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[#5B6B7F] font-semibold mb-1">Plan Comercial Contratado</label>
-                <select
-                  value={newTenantPlan}
-                  onChange={(e) => setNewTenantPlan(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
-                >
-                  {plans.map((p) => (
-                    <option key={p.code} value={p.code}>
-                      {p.name} - S/ {p.price_pen}/mes
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="pt-3">
+              <div className="pt-3 border-t border-[#E2E7EE]">
                 <button
                   type="submit"
                   className="w-full py-2.5 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-bold transition-colors shadow-sm"
@@ -1179,6 +1487,185 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: CREAR USUARIO PARA TENANT ──────────────────────────────── */}
+      {showAddUserModal && selectedTenantForDetails && (
+        <div className="fixed inset-0 bg-[#0B2545]/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white border border-[#E2E7EE] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-[#E2E7EE] pb-3">
+              <h3 className="font-bold text-[#0B2545] flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-[#0A7469]" />
+                Crear Usuario para {selectedTenantForDetails.name}
+              </h3>
+              <button onClick={() => setShowAddUserModal(false)} className="text-[#5B6B7F] hover:text-[#0B2545]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateTenantUser} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-[#5B6B7F] font-semibold mb-1">Nombre Completo</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej. María Sánchez"
+                  value={newUserFullName}
+                  onChange={(e) => setNewUserFullName(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[#5B6B7F] font-semibold mb-1">Correo Electrónico (Login)</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="Ej. maria@cliente.pe"
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[#5B6B7F] font-semibold mb-1">Rol en BackOffice</label>
+                <select
+                  value={newUserRole}
+                  onChange={(e) => setNewUserRole(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
+                >
+                  <option value="admin">Administrador (Control total)</option>
+                  <option value="analyst">Analista de Cuentas por Pagar</option>
+                  <option value="viewer">Solo Lectura / Auditor</option>
+                </select>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[#5B6B7F] font-semibold">Contraseña Asignada</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewUserPassword('Factum@' + Math.random().toString(36).slice(-6) + '!');
+                    }}
+                    className="text-[10px] text-[#0A7469] font-bold hover:underline"
+                  >
+                    Regenerar otra
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={newUserPassword}
+                  onChange={(e) => setNewUserPassword(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-[#E2E7EE] flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddUserModal(false)}
+                  className="px-4 py-2 rounded-xl border border-[#E2E7EE] hover:bg-slate-50 text-[#5B6B7F] font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-bold transition-colors shadow-sm"
+                >
+                  Crear Usuario
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: AVISO Y COPIADO DE CREDENCIALES (JIT/SOPORTE) ───────────── */}
+      {credentialNotice && (
+        <div className="fixed inset-0 bg-[#0B2545]/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white border border-[#E2E7EE] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700">
+                <Key className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-[#0B2545] text-base leading-tight">
+                  {credentialNotice.title}
+                </h3>
+                <p className="text-xs text-[#5B6B7F] mt-0.5">
+                  Credenciales de acceso para el portal BackOffice.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-[#F8FAFC] p-4 rounded-xl border border-[#E2E7EE] space-y-2 text-xs">
+              {credentialNotice.ruc && (
+                <div>
+                  <span className="text-[10px] text-[#5B6B7F] uppercase tracking-wider block font-semibold">
+                    RUC SUNAT de la Empresa:
+                  </span>
+                  <span className="font-mono font-bold text-[#0B2545] text-sm">
+                    {credentialNotice.ruc}
+                  </span>
+                </div>
+              )}
+              <div>
+                <span className="text-[10px] text-[#5B6B7F] uppercase tracking-wider block font-semibold">
+                  Correo Electrónico (Usuario):
+                </span>
+                <span className="font-mono font-bold text-[#0B2545] text-sm select-all">
+                  {credentialNotice.email}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-[#5B6B7F] uppercase tracking-wider block font-semibold">
+                  Contraseña de Acceso:
+                </span>
+                <span className="font-mono font-bold text-emerald-700 text-sm bg-white px-2 py-1 rounded border border-emerald-200 block mt-0.5 select-all">
+                  {credentialNotice.pass}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-[#5B6B7F]">
+              Entregue estas credenciales al cliente para que inicie sesión con su RUC, Email y Contraseña en Factumflux BackOffice.
+            </p>
+
+            <div className="flex items-center justify-between gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const payload = `ACCESO FACTUMFLUX BACKOFFICE\nRUC: ${credentialNotice.ruc || ''}\nEmail: ${credentialNotice.email}\nContraseña: ${credentialNotice.pass}\nURL: https://factumflux-backoffice-pxeov3gtya-tl.a.run.app`;
+                  copyToClipboard(payload);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-[#0B2545] hover:bg-[#1E3A8A] text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+              >
+                {copiedCredential ? (
+                  <>
+                    <Check className="w-4 h-4 text-emerald-400" />
+                    <span>¡Copiado al Portapapeles!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span>Copiar Credenciales</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCredentialNotice(null)}
+                className="px-4 py-2.5 rounded-xl border border-[#E2E7EE] hover:bg-slate-100 text-[#5B6B7F] text-xs font-semibold"
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}
