@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
   X,
   RefreshCw,
+  Download,
 } from 'lucide-react';
 import {
   FactumfluxClient,
@@ -20,6 +21,8 @@ import { SuperAdminLoginScreen } from './components/SuperAdminLoginScreen';
 import { ClientSidebar, ClientNavTab } from './components/ClientSidebar';
 import { ClientDashboardView } from './components/ClientDashboardView';
 import { SireAndNegotiableUnifiedView } from './components/SireAndNegotiableUnifiedView';
+import { ClientSuppliersView } from './components/ClientSuppliersView';
+import { ClientIntegrationsView } from './components/ClientIntegrationsView';
 import { SuperAdminConsoleView } from './components/SuperAdminConsoleView';
 import { SystemModal, SystemModalType } from '@factumflux/ui';
 
@@ -29,9 +32,26 @@ const apiBaseUrl =
     ? 'https://factumflux-backend-pxeov3gtya-tl.a.run.app'
     : 'http://localhost:8080');
 
+const getSavedClientInfo = () => {
+  try {
+    const saved = localStorage.getItem('factumflux_client_info');
+    if (saved) return JSON.parse(saved);
+  } catch {
+    // Ignore
+  }
+  return {
+    tenantId: 'a1111111-1111-1111-1111-111111111111',
+    tenantName: 'La Bodega de la Trattoria S.A.C.',
+    email: 'compras@trattoria.com.pe',
+    ruc: '20501234567',
+  };
+};
+
+const initialClientInfo = getSavedClientInfo();
+
 const client = new FactumfluxClient({
   baseUrl: apiBaseUrl,
-  tenantId: 'a1111111-1111-1111-1111-111111111111', // Tenant La Bodega de la Trattoria
+  tenantId: initialClientInfo.tenantId,
 });
 
 export default function App() {
@@ -53,19 +73,7 @@ export default function App() {
       : 'client_login';
   });
 
-  const [tenantInfo, setTenantInfo] = useState(() => {
-    try {
-      const saved = localStorage.getItem('factumflux_client_info');
-      if (saved) return JSON.parse(saved);
-    } catch {
-      // Ignore
-    }
-    return {
-      tenantId: 'a1111111-1111-1111-1111-111111111111',
-      tenantName: 'La Bodega de la Trattoria S.A.C.',
-      email: 'compras@trattoria.com.pe',
-    };
-  });
+  const [tenantInfo, setTenantInfo] = useState(initialClientInfo);
 
   const [currentTab, setCurrentTab] = useState<ClientNavTab>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -101,6 +109,39 @@ export default function App() {
     });
   };
 
+  // CSV Template Downloader
+  const downloadCSVTemplate = (type: 'po' | 'gr' | 'ses') => {
+    let filename = '';
+    let content = '';
+
+    if (type === 'po') {
+      filename = 'plantilla_ordenes_compra.csv';
+      content =
+        'po_number,supplier_ruc,issue_date,currency,subtotal,tax_amount,total_amount,erp_reference,item_code,item_description,unit_of_measure,quantity,unit_price,item_total\r\n' +
+        'OC-2026-001,20601234567,2026-11-01,PEN,1000.00,180.00,1180.00,SAP-450001,ITEM-001,Suministro de Insumos Industriales,UND,10,100.00,1000.00\r\n' +
+        'OC-2026-002,20100070354,2026-11-02,PEN,2500.00,450.00,2950.00,SAP-450002,ITEM-002,Servicios de Mantenimiento y Calibración,GLB,1,2500.00,2500.00\r\n';
+    } else if (type === 'gr') {
+      filename = 'plantilla_entradas_almacen_migo.csv';
+      content =
+        'po_number,receipt_number,receipt_date,erp_migo_number\r\n' +
+        'OC-2026-001,GR-2026-0911,2026-11-02,5000123456\r\n' +
+        'OC-2026-001,GR-2026-0912,2026-11-03,5000123457\r\n';
+    } else {
+      filename = 'plantilla_hojas_servicio_hes.csv';
+      content =
+        'po_number,ses_number,approval_date,total_amount,currency,erp_hes_number,status\r\n' +
+        'OC-2026-002,HES-2026-0045,2026-11-03,2950.00,PEN,1000456789,approved\r\n';
+    }
+
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Load Invoices & Orders
   const loadInvoicesAndOrders = async () => {
     setLoading(true);
@@ -110,8 +151,8 @@ export default function App() {
         client.listPurchaseOrders().catch(() => []),
         client.getTenantPolicy().catch(() => null),
       ]);
-      setInvoices(invData);
-      setOrders(poData);
+      setInvoices(Array.isArray(invData) ? invData : []);
+      setOrders(Array.isArray(poData) ? poData : []);
       if (polData) setPolicy(polData);
     } catch {
       // Non-blocking
@@ -121,14 +162,17 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (authMode === 'client_portal') {
+    if (authMode === 'client_portal' && tenantInfo.tenantId) {
+      client.setTenantId(tenantInfo.tenantId);
       loadInvoicesAndOrders();
     }
-  }, [authMode]);
+  }, [authMode, tenantInfo.tenantId]);
 
-  const handleClientLogin = (data: { tenantId: string; tenantName: string; email: string }) => {
+  const handleClientLogin = (data: { tenantId: string; tenantName: string; email: string; ruc?: string; token?: string }) => {
     localStorage.setItem('factumflux_client_auth', 'true');
     localStorage.setItem('factumflux_client_info', JSON.stringify(data));
+    client.setTenantId(data.tenantId);
+    if (data.token) client.setToken(data.token);
     setTenantInfo(data);
     setAuthMode('client_portal');
     setCurrentTab('dashboard');
@@ -137,6 +181,7 @@ export default function App() {
   const handleClientLogout = () => {
     localStorage.removeItem('factumflux_client_auth');
     localStorage.removeItem('factumflux_client_info');
+    client.setTenantId('');
     setAuthMode('client_login');
   };
 
@@ -476,13 +521,52 @@ export default function App() {
                     Carga masiva de órdenes de compra, entradas de almacén (MIGO) y conformidades de servicio (HES).
                   </p>
                 </div>
-                <button
-                  onClick={() => setIsIngestingCSV(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-semibold text-xs transition-all shadow-sm"
-                >
-                  <UploadCloud className="w-4 h-4" />
-                  <span>Ingesta CSV (MIGO / HES)</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative group">
+                    <button
+                      type="button"
+                      onClick={() => downloadCSVTemplate('po')}
+                      className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#0B2545] font-semibold text-xs transition-all border border-[#E2E7EE]"
+                    >
+                      <Download className="w-4 h-4 text-[#0A7469]" />
+                      <span>Descargar Plantillas CSV</span>
+                    </button>
+                    <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-[#E2E7EE] rounded-xl shadow-lg p-2 hidden group-hover:block z-20 space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => downloadCSVTemplate('po')}
+                        className="w-full text-left px-3 py-2 rounded-lg text-xs hover:bg-[#E8F4F2] text-[#0B2545] font-medium flex items-center justify-between"
+                      >
+                        <span>Órdenes de Compra (.csv)</span>
+                        <Download className="w-3.5 h-3.5 text-[#0A7469]" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadCSVTemplate('gr')}
+                        className="w-full text-left px-3 py-2 rounded-lg text-xs hover:bg-[#E8F4F2] text-[#0B2545] font-medium flex items-center justify-between"
+                      >
+                        <span>Entradas MIGO (.csv)</span>
+                        <Download className="w-3.5 h-3.5 text-[#0A7469]" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadCSVTemplate('ses')}
+                        className="w-full text-left px-3 py-2 rounded-lg text-xs hover:bg-[#E8F4F2] text-[#0B2545] font-medium flex items-center justify-between"
+                      >
+                        <span>Hojas HES (.csv)</span>
+                        <Download className="w-3.5 h-3.5 text-[#0A7469]" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setIsIngestingCSV(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-semibold text-xs transition-all shadow-sm"
+                  >
+                    <UploadCloud className="w-4 h-4" />
+                    <span>Ingesta CSV (MIGO / HES)</span>
+                  </button>
+                </div>
               </div>
 
               {/* Purchase Orders Table */}
@@ -498,24 +582,32 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E2E7EE] text-[#0B2545]">
-                    {orders.map((po) => (
-                      <tr key={po.id} className="hover:bg-[#F8FAFC]/80 transition-colors">
-                        <td className="py-3 px-4 font-mono font-bold text-[#0A7469]">{po.po_number}</td>
-                        <td className="py-3 px-4">
-                          <span className="text-[#0B2545] block font-medium">{po.supplier_name}</span>
-                          <span className="text-[10px] text-[#5B6B7F] font-mono">RUC: {po.supplier_ruc}</span>
-                        </td>
-                        <td className="py-3 px-4 text-[#5B6B7F]">{po.issue_date}</td>
-                        <td className="py-3 px-4 font-bold text-[#0B2545]">
-                          {po.currency} {po.total_amount.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            {po.status}
-                          </span>
+                    {orders.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-12 text-center text-[#5B6B7F]">
+                          No hay órdenes de compra registradas. Utilice "Ingesta CSV" o descargue la plantilla.
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      orders.map((po) => (
+                        <tr key={po.id} className="hover:bg-[#F8FAFC]/80 transition-colors">
+                          <td className="py-3 px-4 font-mono font-bold text-[#0A7469]">{po.po_number}</td>
+                          <td className="py-3 px-4">
+                            <span className="text-[#0B2545] block font-medium">{po.supplier_name}</span>
+                            <span className="text-[10px] text-[#5B6B7F] font-mono">RUC: {po.supplier_ruc}</span>
+                          </td>
+                          <td className="py-3 px-4 text-[#5B6B7F]">{po.issue_date}</td>
+                          <td className="py-3 px-4 font-bold text-[#0B2545]">
+                            {po.currency} {po.total_amount.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              {po.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -524,7 +616,29 @@ export default function App() {
 
           {/* Unified SIRE & Negotiable Alerts Tab */}
           {currentTab === 'sire_negotiable' && (
-            <SireAndNegotiableUnifiedView client={client} />
+            <SireAndNegotiableUnifiedView
+              client={client}
+              clientRuc={tenantInfo.ruc || '20614201691'}
+              clientName={tenantInfo.tenantName}
+            />
+          )}
+
+          {/* Suppliers Directory Tab */}
+          {currentTab === 'suppliers' && (
+            <ClientSuppliersView
+              client={client}
+              tenantId={tenantInfo.tenantId}
+              tenantName={tenantInfo.tenantName}
+            />
+          )}
+
+          {/* ERP & SIRE Integrations Tab */}
+          {currentTab === 'integrations' && (
+            <ClientIntegrationsView
+              client={client}
+              tenantId={tenantInfo.tenantId}
+              tenantName={tenantInfo.tenantName}
+            />
           )}
 
           {/* Matching Policies Tab */}
@@ -623,6 +737,18 @@ export default function App() {
                 <option value="gr">Entrada de Mercancías MIGO (goods_receipts.csv)</option>
                 <option value="ses">Hojas de Entrada de Servicios HES (service_entry_sheets.csv)</option>
               </select>
+
+              <div className="flex items-center justify-between text-[11px] text-[#0A7469] bg-[#E8F4F2] p-2.5 rounded-lg border border-[#0A7469]/20">
+                <span>¿Requiere la estructura exacta?</span>
+                <button
+                  type="button"
+                  onClick={() => downloadCSVTemplate(csvType)}
+                  className="font-bold underline hover:text-[#075A52] flex items-center gap-1"
+                >
+                  <Download className="w-3 h-3" />
+                  <span>Descargar plantilla (.csv)</span>
+                </button>
+              </div>
 
               <div className="pt-2">
                 <input

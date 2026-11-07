@@ -37,16 +37,16 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
       .catch(() => {
         if (isMounted) {
           setStats({
-            month: '2026-11',
-            total_received_invoices: 42,
-            total_received_amount: 582400.0,
+            month: new Date().toISOString().slice(0, 7),
+            total_received_invoices: 0,
+            total_received_amount: 0.0,
             currency: 'PEN',
-            matched_count: 36,
-            match_ratio_pct: 85.7,
-            observed_count: 6,
-            pending_payment_amount: 145900.0,
-            paid_amount_month: 436500.0,
-            negotiable_risk_count: 3,
+            matched_count: 0,
+            match_ratio_pct: 0.0,
+            observed_count: 0,
+            pending_payment_amount: 0.0,
+            paid_amount_month: 0.0,
+            negotiable_risk_count: 0,
           });
         }
       })
@@ -142,11 +142,11 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
             </span>
           </div>
           <div className="text-2xl font-bold text-[#176B3F] tracking-tight">
-            {(stats?.match_ratio_pct ?? 85.7).toFixed(1)}%
+            {(stats?.match_ratio_pct ?? 0).toFixed(1)}%
           </div>
           <div className="mt-2 text-xs text-[#176B3F] flex items-center gap-1">
             <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>{stats?.matched_count || 0} comprobantes con match exacto</span>
+            <span>{stats?.matched_count ?? 0} comprobantes con match exacto</span>
           </div>
         </div>
 
@@ -209,11 +209,11 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
           <div className="space-y-3">
             <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-[#E2E7EE] flex items-center justify-between text-xs">
               <span className="text-[#0B2545] font-medium">Conciliadas Conformes (Match)</span>
-              <span className="font-bold text-[#176B3F]">{stats?.matched_count || 36} comprobantes</span>
+              <span className="font-bold text-[#176B3F]">{stats?.matched_count ?? 0} comprobantes</span>
             </div>
             <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-[#E2E7EE] flex items-center justify-between text-xs">
               <span className="text-[#0B2545] font-medium">Observadas / Con Discrepancias</span>
-              <span className="font-bold text-[#8A5A00]">{stats?.observed_count || 6} comprobantes</span>
+              <span className="font-bold text-[#8A5A00]">{stats?.observed_count ?? 0} comprobantes</span>
             </div>
           </div>
         </div>

@@ -9,6 +9,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Shield,
+  Users,
+  Cpu,
 } from 'lucide-react';
 
 export type ClientNavTab =
@@ -16,7 +18,9 @@ export type ClientNavTab =
   | 'invoices'
   | 'orders'
   | 'sire_negotiable'
-  | 'policies';
+  | 'policies'
+  | 'suppliers'
+  | 'integrations';
 
 interface ClientSidebarProps {
   currentTab: ClientNavTab;
@@ -67,6 +71,18 @@ export const ClientSidebar: React.FC<ClientSidebarProps> = ({
       label: 'Políticas Matching',
       icon: Sliders,
       badge: null,
+    },
+    {
+      id: 'suppliers' as ClientNavTab,
+      label: 'Directorio Proveedores',
+      icon: Users,
+      badge: null,
+    },
+    {
+      id: 'integrations' as ClientNavTab,
+      label: 'Integración ERP / APIs',
+      icon: Cpu,
+      badge: 'Conectores',
     },
   ];
 

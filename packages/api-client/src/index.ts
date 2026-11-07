@@ -249,35 +249,105 @@ export interface ApiClientConfig {
 
 export interface NegotiableAlertItem {
   id: string;
+  invoice_id?: string;
   series: string;
   number: string;
   supplier_ruc: string;
   supplier_name: string;
   issue_date: string;
   due_date?: string;
-  presumed_conformity_deadline: string;
-  days_remaining: number;
-  status_urgency: 'URGENT' | 'WARNING' | 'EXPIRING_SOON' | 'CONFORMITY_PRESUMED';
+  presumed_conformity_deadline?: string;
+  conformity_deadline?: string;
+  days_remaining?: number;
+  hours_remaining?: number;
+  status_urgency?: 'URGENT' | 'WARNING' | 'EXPIRING_SOON' | 'CONFORMITY_PRESUMED';
+  is_urgent?: boolean;
   total_amount: number;
   currency: string;
 }
 
 export interface SIREComparisonResult {
   period: string;
-  sire_records_count: number;
-  factumflux_invoices_count: number;
+  sire_records_count?: number;
+  total_sire_proposals?: number;
+  factumflux_invoices_count?: number;
+  total_portal_invoices?: number;
   matched_count: number;
-  missing_in_factumflux: number;
-  missing_in_sire: number;
-  discrepancies: Array<{
+  missing_in_factumflux?: number;
+  missing_in_portal_count?: number;
+  missing_in_sire?: number;
+  missing_in_sire_count?: number;
+  items?: Array<{
+    document_ref?: string;
+    document_number?: string;
+    supplier_ruc: string;
+    issue_date?: string;
+    status?: string;
+    issue_type?: string;
+    sire_amount?: number;
+    sire_total?: number;
+    factumflux_amount?: number;
+    portal_total?: number;
+    difference?: number;
+    message?: string;
+  }>;
+  discrepancies?: Array<{
+    document_ref?: string;
     document_number: string;
     supplier_ruc: string;
     issue_date: string;
     sire_amount?: number;
+    sire_total?: number;
     factumflux_amount?: number;
+    portal_total?: number;
     difference?: number;
-    issue_type: 'MISSING_IN_LOCAL' | 'MISSING_IN_SIRE' | 'AMOUNT_MISMATCH';
+    issue_type: string;
+    message?: string;
   }>;
+}
+
+export interface TenantSupplierItem {
+  id: string;
+  supplier_id: string;
+  ruc: string;
+  legal_name: string;
+  commercial_name?: string;
+  sunat_status: string;
+  sunat_condition: string;
+  status: 'active' | 'suspended' | 'blocked';
+  payment_terms_days: number;
+  invoices_count: number;
+  total_billed_amount: number;
+  created_at: string;
+}
+
+export interface RegisterSupplierRequest {
+  ruc: string;
+  legal_name: string;
+  commercial_name?: string;
+  contact_email?: string;
+  phone?: string;
+  payment_terms_days?: number;
+}
+
+export interface TenantIntegrationsSettings {
+  erp_type: string;
+  erp_endpoint_url: string;
+  erp_auth_type: string;
+  erp_api_key: string;
+  erp_sync_orders_enabled: boolean;
+  erp_sync_receipts_enabled: boolean;
+  erp_sync_services_enabled: boolean;
+  erp_post_invoices_enabled: boolean;
+  erp_sync_interval_mins: number;
+  sire_sol_ruc: string;
+  sire_sol_user: string;
+  sire_sol_password?: string;
+  sire_client_id: string;
+  sire_client_secret?: string;
+  sire_auto_sync_enabled: boolean;
+  inbound_api_key?: string;
+  last_synced_at?: string;
 }
 
 // Operational Flow Enhancements (Phase 6)
@@ -744,6 +814,37 @@ export class FactumfluxClient {
     return this.fetch('/api/v1/whatsapp/simulate', {
       method: 'POST',
       body: JSON.stringify({ phone_number: phoneNumber, message }),
+    });
+  }
+
+  // Tenant Suppliers Directory & Onboarding
+  async listTenantSuppliers(): Promise<TenantSupplierItem[]> {
+    return this.fetch('/api/v1/backoffice/suppliers');
+  }
+
+  async registerSupplier(data: RegisterSupplierRequest): Promise<{ success: boolean; supplier_id: string; message: string }> {
+    return this.fetch('/api/v1/backoffice/suppliers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Tenant ERP & SIRE Integrations Configuration
+  async getTenantIntegrations(): Promise<TenantIntegrationsSettings> {
+    return this.fetch('/api/v1/backoffice/integrations');
+  }
+
+  async updateTenantIntegrations(data: TenantIntegrationsSettings): Promise<{ success: boolean; message: string }> {
+    return this.fetch('/api/v1/backoffice/integrations', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async testERPConnection(data?: { erp_type?: string; endpoint_url?: string }): Promise<any> {
+    return this.fetch('/api/v1/backoffice/integrations/test', {
+      method: 'POST',
+      body: JSON.stringify(data || {}),
     });
   }
 }
