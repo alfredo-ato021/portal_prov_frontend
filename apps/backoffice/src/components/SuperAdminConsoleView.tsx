@@ -79,7 +79,7 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserFullName, setNewUserFullName] = useState('');
-  const [newUserRole, setNewUserRole] = useState('admin');
+  const [newUserRole, setNewUserRole] = useState('tenant_admin');
   const [newUserPassword, setNewUserPassword] = useState('');
   const [credentialNotice, setCredentialNotice] = useState<{
     email: string;
@@ -1244,7 +1244,7 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                       setShowAddUserModal(true);
                       setNewUserEmail('');
                       setNewUserFullName('');
-                      setNewUserRole('admin');
+                      setNewUserRole('tenant_admin');
                       setNewUserPassword('Factum@' + Math.random().toString(36).slice(-6) + '!');
                     }}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-semibold shadow-sm transition-colors self-start sm:self-auto"
@@ -1294,7 +1294,15 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                             </td>
                             <td className="py-3 px-3 whitespace-nowrap">
                               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-700 border border-slate-200">
-                                {u.role || 'client'}
+                                {u.role === 'tenant_admin'
+                                  ? 'ADMINISTRADOR'
+                                  : u.role === 'treasury_lead'
+                                  ? 'ANALISTA CP'
+                                  : u.role === 'approver'
+                                  ? 'APROBADOR'
+                                  : u.role === 'auditor'
+                                  ? 'AUDITOR'
+                                  : u.role || 'CLIENTE'}
                               </span>
                             </td>
                             <td className="py-3 px-3 whitespace-nowrap">
@@ -1581,9 +1589,10 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                   onChange={(e) => setNewUserRole(e.target.value)}
                   className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
                 >
-                  <option value="admin">Administrador (Control total)</option>
-                  <option value="analyst">Analista de Cuentas por Pagar</option>
-                  <option value="viewer">Solo Lectura / Auditor</option>
+                  <option value="tenant_admin">Administrador de Cuenta (tenant_admin - Control total)</option>
+                  <option value="treasury_lead">Líder de Cuentas por Pagar (treasury_lead)</option>
+                  <option value="approver">Aprobador Comercial (approver)</option>
+                  <option value="auditor">Auditor / Solo Lectura (auditor)</option>
                 </select>
               </div>
 
