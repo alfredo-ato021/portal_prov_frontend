@@ -12,6 +12,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { FactumfluxClient, InvoiceSummary } from '@factumflux/api-client';
+import { SystemModal } from '@factumflux/ui';
 
 interface InvoicesListViewProps {
   client: FactumfluxClient;
@@ -24,6 +25,7 @@ export const InvoicesListView: React.FC<InvoicesListViewProps> = ({ client, onNa
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [paymentFilter, setPaymentFilter] = useState<string>('ALL');
+  const [selectedInvoiceDetails, setSelectedInvoiceDetails] = useState<InvoiceSummary | null>(null);
 
   const loadInvoices = async () => {
     setLoading(true);
@@ -364,7 +366,7 @@ export const InvoicesListView: React.FC<InvoicesListViewProps> = ({ client, onNa
                     {/* Action */}
                     <td className="py-4 px-4 text-right">
                       <button
-                        onClick={() => alert(`Detalles del Comprobante ${inv.series}-{inv.number}\nHash SHA-256 verificado.\nEstado SUNAT: ${inv.sunat_status}\nEstado de Proceso: ${inv.processing_status}`)}
+                        onClick={() => setSelectedInvoiceDetails(inv)}
                         className="p-1.5 rounded-lg text-[#5B6B7F] hover:text-[#0B2545] hover:bg-[#F3F5F8] transition-colors"
                         title="Ver detalle del comprobante"
                       >
@@ -378,6 +380,19 @@ export const InvoicesListView: React.FC<InvoicesListViewProps> = ({ client, onNa
           </table>
         </div>
       </div>
+
+      {/* ── MODAL DEL SISTEMA: DETALLES DEL COMPROBANTE ────────────────────── */}
+      {selectedInvoiceDetails && (
+        <SystemModal
+          isOpen={true}
+          type="info"
+          title={`Comprobante ${selectedInvoiceDetails.series}-${selectedInvoiceDetails.number}`}
+          message={`Detalles de emisión y procesamiento:\n\n• Estado SUNAT: ${selectedInvoiceDetails.sunat_status.toUpperCase()}\n• Estado de Proceso: ${selectedInvoiceDetails.processing_status || 'Recibido'}\n• Estado de Pago: ${selectedInvoiceDetails.payment_status || 'Pendiente'}\n• Verificación Criptográfica: Hash SHA-256 inmutable registrado.`}
+          confirmText="Entendido"
+          onConfirm={() => setSelectedInvoiceDetails(null)}
+          onCancel={() => setSelectedInvoiceDetails(null)}
+        />
+      )}
     </div>
   );
 };

@@ -18,6 +18,7 @@ import {
   FactumfluxClient,
   POReceptionStatusResponse,
 } from '@factumflux/api-client';
+import { SystemModal } from '@factumflux/ui';
 
 interface UploadInvoiceViewProps {
   client: FactumfluxClient;
@@ -37,6 +38,13 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
   const [isCheckingPO, setIsCheckingPO] = useState(false);
   const [poStatus, setPoStatus] = useState<POReceptionStatusResponse | null>(null);
   const [poError, setPoError] = useState<string | null>(null);
+
+  // System Modal Dialog state
+  const [systemAlert, setSystemAlert] = useState<{
+    title: string;
+    message: string;
+    type?: 'warning' | 'danger' | 'info';
+  } | null>(null);
 
   // Step 2: Invoice XML & PDF Upload
   const [xmlFile, setXmlFile] = useState<File | null>(null);
@@ -106,7 +114,11 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
     if (!file) return;
 
     if (!file.name.toLowerCase().endsWith('.xml')) {
-      alert('Por favor seleccione un archivo XML válido (comprobante UBL 2.1).');
+      setSystemAlert({
+        type: 'warning',
+        title: 'Archivo no Válido',
+        message: 'Por favor seleccione un archivo XML válido (comprobante electrónico UBL 2.1 homologado por SUNAT).',
+      });
       return;
     }
 
@@ -852,6 +864,19 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {/* ── MODAL DEL SISTEMA: ALERTA DE ARCHIVO O FORMATO ──────────────────── */}
+      {systemAlert && (
+        <SystemModal
+          isOpen={true}
+          type={systemAlert.type || 'warning'}
+          title={systemAlert.title}
+          message={systemAlert.message}
+          confirmText="Entendido"
+          onConfirm={() => setSystemAlert(null)}
+          onCancel={() => setSystemAlert(null)}
+        />
       )}
     </div>
   );

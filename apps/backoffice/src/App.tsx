@@ -21,6 +21,7 @@ import { ClientSidebar, ClientNavTab } from './components/ClientSidebar';
 import { ClientDashboardView } from './components/ClientDashboardView';
 import { SireAndNegotiableUnifiedView } from './components/SireAndNegotiableUnifiedView';
 import { SuperAdminConsoleView } from './components/SuperAdminConsoleView';
+import { SystemModal, SystemModalType } from '@factumflux/ui';
 
 const apiBaseUrl =
   (import.meta as any).env?.VITE_API_BASE_URL ||
@@ -83,6 +84,23 @@ export default function App() {
   const [isUploadingCSV, setIsUploadingCSV] = useState(false);
   const csvFileInputRef = useRef<HTMLInputElement>(null);
 
+  // System Modal Dialog state
+  const [systemModal, setSystemModal] = useState<{
+    isOpen: boolean;
+    type?: SystemModalType;
+    title: string;
+    message: string;
+  } | null>(null);
+
+  const showErrorModal = (title: string, message: string) => {
+    setSystemModal({
+      isOpen: true,
+      type: 'danger',
+      title,
+      message,
+    });
+  };
+
   // Load Invoices & Orders
   const loadInvoicesAndOrders = async () => {
     setLoading(true);
@@ -140,7 +158,7 @@ export default function App() {
       setActionMessage(`SUNAT: ${res.response_message || 'Comprobante verificado exitosamente.'}`);
       await loadInvoicesAndOrders();
     } catch (err: any) {
-      alert(err.message || 'Error validando con SUNAT');
+      showErrorModal('Error en Validación SUNAT', err.message || 'Error validando comprobante con SUNAT.');
     } finally {
       setProcessingInvoiceId(null);
     }
@@ -154,7 +172,7 @@ export default function App() {
       setActionMessage(`3-Way Match: ${res.summary_note || 'Conciliación ejecutada.'}`);
       await loadInvoicesAndOrders();
     } catch (err: any) {
-      alert(err.message || 'Error ejecutando cruce 3-Way');
+      showErrorModal('Error en Cruce 3-Way', err.message || 'Error ejecutando cruce y conciliación 3-Way.');
     } finally {
       setProcessingInvoiceId(null);
     }
@@ -168,7 +186,7 @@ export default function App() {
       setActionMessage(`SAP S/4HANA: ${res.message || 'Factura contabilizada exitosamente en ERP.'}`);
       await loadInvoicesAndOrders();
     } catch (err: any) {
-      alert(err.message || 'Error contabilizando en SAP');
+      showErrorModal('Error en Contabilización SAP', err.message || 'Error contabilizando comprobante en SAP S/4HANA.');
     } finally {
       setProcessingInvoiceId(null);
     }
@@ -190,7 +208,7 @@ export default function App() {
       setIsIngestingCSV(false);
       await loadInvoicesAndOrders();
     } catch (err: any) {
-      alert(err.message || 'Error procesando archivo CSV.');
+      showErrorModal('Error de Ingesta CSV', err.message || 'Error procesando archivo CSV.');
     } finally {
       setIsUploadingCSV(false);
       if (csvFileInputRef.current) csvFileInputRef.current.value = '';
@@ -636,6 +654,19 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── MODAL DEL SISTEMA FACTUMFLUX (ALERTAS Y NOTIFICACIONES) ─────────── */}
+      {systemModal && (
+        <SystemModal
+          isOpen={systemModal.isOpen}
+          type={systemModal.type}
+          title={systemModal.title}
+          message={systemModal.message}
+          confirmText="Entendido"
+          onConfirm={() => setSystemModal(null)}
+          onCancel={() => setSystemModal(null)}
+        />
       )}
     </div>
   );

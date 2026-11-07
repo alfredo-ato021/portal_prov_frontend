@@ -30,6 +30,7 @@ import {
   AuditEvent,
   TenantUserItem,
 } from '@factumflux/api-client';
+import { SystemModal, SystemModalType } from '@factumflux/ui';
 
 interface SuperAdminConsoleViewProps {
   client: FactumfluxClient;
@@ -87,6 +88,50 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
     ruc?: string;
   } | null>(null);
   const [copiedCredential, setCopiedCredential] = useState(false);
+
+  // System Modal Dialog state (replaces window.alert and window.confirm)
+  const [systemModal, setSystemModal] = useState<{
+    isOpen: boolean;
+    type?: SystemModalType;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+  } | null>(null);
+
+  const showAlertModal = (title: string, message: string, type: SystemModalType = 'info') => {
+    setSystemModal({
+      isOpen: true,
+      type,
+      title,
+      message,
+      confirmText: 'Entendido',
+      onConfirm: () => setSystemModal(null),
+    });
+  };
+
+  const showConfirmModal = (opts: {
+    title: string;
+    message: string;
+    type?: SystemModalType;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+  }) => {
+    setSystemModal({
+      isOpen: true,
+      type: opts.type || 'warning',
+      title: opts.title,
+      message: opts.message,
+      confirmText: opts.confirmText || 'Confirmar',
+      cancelText: opts.cancelText || 'Cancelar',
+      onConfirm: () => {
+        setSystemModal(null);
+        opts.onConfirm();
+      },
+    });
+  };
 
   // Edit plan modal
   const [editingPlan, setEditingPlan] = useState<CommercialPlan | null>(null);
@@ -162,28 +207,34 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
       setNewTenantAdminPassword('');
       setActionMessage(`Empresa "${created.name}" creada exitosamente con CMEK KMS y acceso BackOffice.`);
     } catch (err: any) {
-      alert(err.message || 'Error al crear tenant.');
+      showAlertModal('Error al crear empresa', err.message || 'Error al crear tenant.', 'danger');
     }
   };
 
-  const handleToggleTenantStatus = async (tenant: TenantSummary) => {
+  const handleToggleTenantStatus = (tenant: TenantSummary) => {
     const nextStatus = tenant.status === 'active' ? 'suspended' : 'active';
-    const confirmMsg =
-      nextStatus === 'suspended'
-        ? `¿Desea suspender el acceso a "${tenant.name}"? Los proveedores no podrán emitir facturas.`
-        : `¿Desea reactivar la cuenta de "${tenant.name}"?`;
+    const isSuspending = nextStatus === 'suspended';
 
-    if (!window.confirm(confirmMsg)) return;
-
-    try {
-      await client.updateTenantStatus(tenant.id, nextStatus);
-      setTenants(
-        tenants.map((t) => (t.id === tenant.id ? { ...t, status: nextStatus } : t))
-      );
-      setActionMessage(`Estado de "${tenant.name}" actualizado a ${nextStatus.toUpperCase()}.`);
-    } catch (err: any) {
-      alert(err.message || 'Error actualizando estado.');
-    }
+    showConfirmModal({
+      type: isSuspending ? 'danger' : 'info',
+      title: isSuspending ? 'Suspender Acceso a Empresa' : 'Reactivar Acceso a Empresa',
+      message: isSuspending
+        ? `¿Desea suspender el acceso a "${tenant.name}"? Los proveedores no podrán emitir facturas y se bloqueará el acceso al portal BackOffice.`
+        : `¿Desea reactivar la cuenta de "${tenant.name}"? Se restablecerán las operaciones de recepción y facturación.`,
+      confirmText: isSuspending ? 'Suspender Acceso' : 'Reactivar Cuenta',
+      cancelText: 'Cancelar',
+      onConfirm: async () => {
+        try {
+          await client.updateTenantStatus(tenant.id, nextStatus);
+          setTenants(
+            tenants.map((t) => (t.id === tenant.id ? { ...t, status: nextStatus } : t))
+          );
+          setActionMessage(`Estado de "${tenant.name}" actualizado a ${nextStatus.toUpperCase()}.`);
+        } catch (err: any) {
+          showAlertModal('Error al actualizar estado', err.message || 'Error actualizando estado.', 'danger');
+        }
+      },
+    });
   };
 
   const loadTenantUsers = async (tenantId: string) => {
@@ -240,28 +291,32 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
         ruc: selectedTenantForDetails.ruc,
       });
     } catch (err: any) {
-      alert(err.message || 'Error al crear usuario para el cliente.');
+      showAlertModal('Error al crear usuario', err.message || 'Error al crear usuario para el cliente.', 'danger');
     }
   };
 
-  const handleResetUserPassword = async (user: TenantUserItem) => {
+  const handleResetUserPassword = (user: TenantUserItem) => {
     if (!selectedTenantForDetails) return;
-    const confirm = window.confirm(
-      `¿Desea regenerar la contraseña para ${user.email}? La credencial anterior será invalidada inmediatamente.`
-    );
-    if (!confirm) return;
-
-    try {
-      const res = await client.resetTenantUserPassword(selectedTenantForDetails.id, user.id);
-      setCredentialNotice({
-        title: 'Contraseña Regenerada con Éxito',
-        email: user.email,
-        pass: res.new_password,
-        ruc: selectedTenantForDetails.ruc,
-      });
-    } catch (err: any) {
-      alert(err.message || 'Error al regenerar contraseña.');
-    }
+    showConfirmModal({
+      type: 'warning',
+      title: 'Regenerar Contraseña',
+      message: `¿Desea regenerar la contraseña para ${user.email}? La credencial anterior será invalidada inmediatamente.`,
+      confirmText: 'Regenerar Clave',
+      cancelText: 'Cancelar',
+      onConfirm: async () => {
+        try {
+          const res = await client.resetTenantUserPassword(selectedTenantForDetails.id, user.id);
+          setCredentialNotice({
+            title: 'Contraseña Regenerada con Éxito',
+            email: user.email,
+            pass: res.new_password,
+            ruc: selectedTenantForDetails.ruc,
+          });
+        } catch (err: any) {
+          showAlertModal('Error al regenerar contraseña', err.message || 'Error al regenerar contraseña.', 'danger');
+        }
+      },
+    });
   };
 
   const handleToggleUserStatus = async (user: TenantUserItem) => {
@@ -276,7 +331,7 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
         `Usuario ${user.email} ${nextState ? 'activado' : 'desactivado'} correctamente.`
       );
     } catch (err: any) {
-      alert(err.message || 'Error al modificar estado del usuario.');
+      showAlertModal('Error al modificar estado', err.message || 'Error al modificar estado del usuario.', 'danger');
     }
   };
 
@@ -301,7 +356,7 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
       setSelectedTenantForDetails(null);
       setActionMessage(`Ficha de "${updated.name}" actualizada con éxito. Plan: ${updated.plan_code?.toUpperCase()}, Estado: ${updated.status?.toUpperCase()}.`);
     } catch (err: any) {
-      alert(err.message || 'Error al actualizar detalles de la empresa.');
+      showAlertModal('Error al guardar empresa', err.message || 'Error al actualizar detalles de la empresa.', 'danger');
     } finally {
       setSavingTenantDetails(false);
     }
@@ -326,7 +381,7 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
       setRenewingTenant(null);
       setActionMessage(`Plan renovado exitosamente para "${updated.name}". Nueva vigencia calculada.`);
     } catch (err: any) {
-      alert(err.message || 'Error al renovar plan.');
+      showAlertModal('Error al renovar plan', err.message || 'Error al renovar plan.', 'danger');
     }
   };
 
@@ -357,14 +412,14 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
       setEditingPlan(null);
       setActionMessage(`Plan "${updated.name}" actualizado. Los cambios ya alimentan la Landing Page.`);
     } catch (err: any) {
-      alert(err.message || 'Error al guardar plan.');
+      showAlertModal('Error al guardar plan', err.message || 'Error al guardar plan.', 'danger');
     }
   };
 
   const handleCreateJIT = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!jitTenantId) {
-      alert('Seleccione un tenant objetivo para la sesión JIT.');
+      showAlertModal('Requisito Incompleto', 'Seleccione un tenant objetivo para la sesión JIT.', 'warning');
       return;
     }
     try {
@@ -377,7 +432,7 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
       setShowNewJit(false);
       setActionMessage(`Sesión JIT autorizada con TTL de ${jitHours} horas.`);
     } catch (err: any) {
-      alert(err.message || 'Error al autorizar sesión JIT PAM.');
+      showAlertModal('Error al autorizar sesión', err.message || 'Error al autorizar sesión JIT PAM.', 'danger');
     }
   };
 
@@ -434,11 +489,10 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
           <nav className="p-4 space-y-1 text-sm font-medium">
             <button
               onClick={() => setActiveTab('tenants')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
-                activeTab === 'tenants'
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${activeTab === 'tenants'
                   ? 'bg-[#0A7469] text-white shadow-md'
                   : 'text-white/75 hover:bg-white/10 hover:text-white'
-              }`}
+                }`}
             >
               <div className="flex items-center gap-2.5">
                 <Building2 className="w-4 h-4 text-[#4FC9BE]" />
@@ -451,11 +505,10 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
 
             <button
               onClick={() => setActiveTab('plans')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
-                activeTab === 'plans'
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${activeTab === 'plans'
                   ? 'bg-[#0A7469] text-white shadow-md'
                   : 'text-white/75 hover:bg-white/10 hover:text-white'
-              }`}
+                }`}
             >
               <div className="flex items-center gap-2.5">
                 <Layers className="w-4 h-4 text-[#4FC9BE]" />
@@ -468,11 +521,10 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
 
             <button
               onClick={() => setActiveTab('jit')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
-                activeTab === 'jit'
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${activeTab === 'jit'
                   ? 'bg-[#0A7469] text-white shadow-md'
                   : 'text-white/75 hover:bg-white/10 hover:text-white'
-              }`}
+                }`}
             >
               <div className="flex items-center gap-2.5">
                 <Key className="w-4 h-4 text-amber-400" />
@@ -485,11 +537,10 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
 
             <button
               onClick={() => setActiveTab('audit')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
-                activeTab === 'audit'
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${activeTab === 'audit'
                   ? 'bg-[#0A7469] text-white shadow-md'
                   : 'text-white/75 hover:bg-white/10 hover:text-white'
-              }`}
+                }`}
             >
               <div className="flex items-center gap-2.5">
                 <Shield className="w-4 h-4 text-[#4FC9BE]" />
@@ -683,11 +734,10 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
 
                             <td className="py-4 px-4 whitespace-nowrap">
                               <span
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                                  isActive
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${isActive
                                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                     : 'bg-rose-50 text-rose-700 border border-rose-200'
-                                }`}
+                                  }`}
                               >
                                 {isActive ? (
                                   <>
@@ -721,11 +771,10 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                                   e.stopPropagation();
                                   handleToggleTenantStatus(t);
                                 }}
-                                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
-                                  isActive
+                                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${isActive
                                     ? 'bg-white hover:bg-rose-50 text-rose-600 border-rose-200'
                                     : 'bg-white hover:bg-emerald-50 text-emerald-600 border-emerald-200'
-                                }`}
+                                  }`}
                                 title={isActive ? 'Suspender acceso a la cuenta' : 'Reactivar cuenta'}
                               >
                                 {isActive ? 'Desactivar' : 'Activar'}
@@ -776,11 +825,10 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                           {p.code}
                         </span>
                         <span
-                          className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-                            p.is_active
+                          className={`text-xs px-2 py-0.5 rounded-full font-semibold ${p.is_active
                               ? 'bg-emerald-50 text-emerald-700'
                               : 'bg-slate-100 text-slate-500'
-                          }`}
+                            }`}
                         >
                           {p.is_active ? 'Activo en Landing' : 'Oculto'}
                         </span>
@@ -965,11 +1013,10 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                       Ficha Integral de Cliente (Tenant)
                     </h3>
                     <span
-                      className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${
-                        selectedTenantForDetails.status === 'active'
+                      className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${selectedTenantForDetails.status === 'active'
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           : 'bg-rose-50 text-rose-700 border-rose-200'
-                      }`}
+                        }`}
                     >
                       {selectedTenantForDetails.status === 'active' ? 'Cuenta Activa' : 'Cuenta Suspendida'}
                     </span>
@@ -1081,11 +1128,10 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                     <select
                       value={editTenantStatus}
                       onChange={(e) => setEditTenantStatus(e.target.value as 'active' | 'suspended')}
-                      className={`w-full px-3 py-2 border rounded-xl text-sm font-semibold ${
-                        editTenantStatus === 'active'
+                      className={`w-full px-3 py-2 border rounded-xl text-sm font-semibold ${editTenantStatus === 'active'
                           ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
                           : 'bg-rose-50 text-rose-800 border-rose-300'
-                      }`}
+                        }`}
                     >
                       <option value="active">Activo (Acceso Completo)</option>
                       <option value="suspended">Suspendido (Bloqueado)</option>
@@ -1253,11 +1299,10 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                             </td>
                             <td className="py-3 px-3 whitespace-nowrap">
                               <span
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                  u.is_active
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${u.is_active
                                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                     : 'bg-rose-50 text-rose-700 border border-rose-200'
-                                }`}
+                                  }`}
                               >
                                 {u.is_active ? <UserCheck className="w-3 h-3" /> : <UserX className="w-3 h-3" />}
                                 {u.is_active ? 'Activo' : 'Suspendido'}
@@ -1284,11 +1329,10 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                               <button
                                 type="button"
                                 onClick={() => handleToggleUserStatus(u)}
-                                className={`px-2 py-1 rounded-lg text-xs font-medium border transition-colors ${
-                                  u.is_active
+                                className={`px-2 py-1 rounded-lg text-xs font-medium border transition-colors ${u.is_active
                                     ? 'bg-white hover:bg-rose-50 text-rose-600 border-rose-200'
                                     : 'bg-white hover:bg-emerald-50 text-emerald-600 border-emerald-200'
-                                }`}
+                                  }`}
                               >
                                 {u.is_active ? 'Desactivar' : 'Activar'}
                               </button>
@@ -1943,6 +1987,20 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* ── MODAL DEL SISTEMA FACTUMFLUX (ALERTAS Y CONFIRMACIONES) ─────────── */}
+      {systemModal && (
+        <SystemModal
+          isOpen={systemModal.isOpen}
+          type={systemModal.type}
+          title={systemModal.title}
+          message={systemModal.message}
+          confirmText={systemModal.confirmText}
+          cancelText={systemModal.cancelText}
+          onConfirm={systemModal.onConfirm}
+          onCancel={() => setSystemModal(null)}
+        />
       )}
     </div>
   );

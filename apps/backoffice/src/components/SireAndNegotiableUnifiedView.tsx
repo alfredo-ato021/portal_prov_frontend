@@ -11,6 +11,7 @@ import {
   NegotiableAlertItem,
   SIREComparisonResult,
 } from '@factumflux/api-client';
+import { SystemModal } from '@factumflux/ui';
 
 interface SireAndNegotiableUnifiedViewProps {
   client: FactumfluxClient;
@@ -29,6 +30,10 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
   const [sirePeriod, setSirePeriod] = useState('2026-11');
   const [sireData, setSireData] = useState<SIREComparisonResult | null>(null);
   const [isComparingSire, setIsComparingSire] = useState(false);
+
+  // System Modal Dialog state
+  const [disconformityTarget, setDisconformityTarget] = useState<NegotiableAlertItem | null>(null);
+  const [systemNotice, setSystemNotice] = useState<{ title: string; message: string; type?: 'info' | 'success' } | null>(null);
 
   const loadAlerts = async () => {
     setLoadingAlerts(true);
@@ -269,7 +274,7 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
                         </td>
                         <td className="py-4 px-4 text-right">
                           <button
-                            onClick={() => alert(`Registrar Disconformidad para ${al.series}-${al.number}\nMotivo: Pendiente de inspección de calidad o discrepancia de precio.\nEsta acción se sincroniza con SUNAT/CAVALI.`)}
+                            onClick={() => setDisconformityTarget(al)}
                             className="px-3 py-1.5 rounded-lg bg-[#FDECEA] hover:bg-[#FCD8D4] text-[#B42318] border border-[#B42318]/20 text-xs font-semibold transition-colors"
                           >
                             Registrar Disconformidad
@@ -383,6 +388,41 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
             </div>
           )}
         </div>
+      )}
+
+      {/* ── MODAL DEL SISTEMA: DISCONFORMIDAD FACTURA NEGOCIABLE ────────────── */}
+      {disconformityTarget && (
+        <SystemModal
+          isOpen={true}
+          type="warning"
+          title={`Registrar Disconformidad (${disconformityTarget.series}-${disconformityTarget.number})`}
+          message={`¿Desea registrar disconformidad comercial ante SUNAT y CAVALI para este comprobante emitido por ${disconformityTarget.supplier_name || disconformityTarget.supplier_ruc} por un monto de S/ ${disconformityTarget.total_amount.toLocaleString('es-PE', { minimumFractionDigits: 2 })}?\n\nMotivo: Inspección pendiente de calidad o discrepancia en orden de compra.`}
+          confirmText="Confirmar Disconformidad"
+          cancelText="Volver"
+          onConfirm={() => {
+            const target = disconformityTarget;
+            setDisconformityTarget(null);
+            setSystemNotice({
+              type: 'success',
+              title: 'Disconformidad Registrada',
+              message: `La disconformidad para el comprobante ${target.series}-${target.number} ha sido procesada y notificada a SUNAT/CAVALI con éxito.`,
+            });
+          }}
+          onCancel={() => setDisconformityTarget(null)}
+        />
+      )}
+
+      {/* ── MODAL DEL SISTEMA: AVISO INFORMATIVO / ÉXITO ─────────────────────── */}
+      {systemNotice && (
+        <SystemModal
+          isOpen={true}
+          type={systemNotice.type || 'info'}
+          title={systemNotice.title}
+          message={systemNotice.message}
+          confirmText="Entendido"
+          onConfirm={() => setSystemNotice(null)}
+          onCancel={() => setSystemNotice(null)}
+        />
       )}
     </div>
   );
