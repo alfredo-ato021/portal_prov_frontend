@@ -1,0 +1,38 @@
+name: Deploy Frontend to Google Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+      - '.gitignore'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Build & Deploy Microfrontends
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/936448852132/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
+          service_account: 'sa-github-actions@portalproveedoresrva.iam.gserviceaccount.com'
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: portalproveedoresrva
+
+      - name: Submit Cloud Build & Deploy Microfrontends
+        run: |
+          gcloud builds submit --config=cloudbuild.yaml --project=portalproveedoresrva
