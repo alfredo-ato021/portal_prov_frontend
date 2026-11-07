@@ -11,6 +11,10 @@ import {
   Printer,
   X,
   Landmark,
+  FileText,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
 } from 'lucide-react';
 import {
   FactumfluxClient,
@@ -42,6 +46,8 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
   const [factoringOps, setFactoringOps] = useState<FactoringOperation[]>([]);
   const [loadingFactoring, setLoadingFactoring] = useState(false);
   const [selectedFactoringDoc, setSelectedFactoringDoc] = useState<FactoringOperation | null>(null);
+  const [docModalTab, setDocModalTab] = useState<'pdf' | 'summary'>('pdf');
+  const [pdfZoom, setPdfZoom] = useState<number>(100);
 
   // SIRE comparison state
   const [sirePeriod, setSirePeriod] = useState(() => new Date().toISOString().slice(0, 7));
@@ -301,6 +307,49 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
       title: 'Archivo TXT de Disconformidades SIRE',
       message: `Se ha generado el archivo oficial de exclusiones / reemplazo de propuesta RCE:\n\n${fileName}\n\nContiene los comprobantes observados y faltantes para sustentar la disconformidad ante SUNAT.`,
     });
+  };
+
+  const handleDownloadFactoringPdf = () => {
+    if (!selectedFactoringDoc) return;
+    const fileName = `Carta_Notarial_Cesion_${selectedFactoringDoc.series}-${selectedFactoringDoc.number}_${(selectedFactoringDoc.financier_name || 'Factoring').replace(/\s+/g, '_')}.html`;
+
+    const sheetElement = document.getElementById('factoring-notarial-sheet');
+    if (!sheetElement) return;
+
+    const htmlContent = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Carta Notarial de Cesión de Derechos - ${selectedFactoringDoc.series}-${selectedFactoringDoc.number}</title>
+  <style>
+    @page { size: A4 portrait; margin: 15mm; }
+    body { font-family: 'Times New Roman', Times, serif; color: #111827; background: #fff; margin: 0; padding: 25px; line-height: 1.5; font-size: 11pt; }
+    .header-table { width: 100%; border-bottom: 2px solid #1e293b; padding-bottom: 12px; margin-bottom: 20px; }
+    .header-title { font-size: 13pt; font-weight: bold; text-align: center; text-transform: uppercase; margin: 18px 0; letter-spacing: 0.5px; }
+    .legal-table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+    .legal-table th, .legal-table td { border: 1px solid #475569; padding: 7px 10px; font-size: 10pt; text-align: left; }
+    .legal-table th { background-color: #f1f5f9; font-weight: bold; }
+    .bank-box { border: 2px solid #6366f1; background-color: #f8fafc; padding: 14px; border-radius: 6px; margin: 18px 0; }
+    .warning-box { border: 1px solid #d97706; background-color: #fef3c7; padding: 12px; border-radius: 4px; margin: 18px 0; font-size: 9.5pt; text-align: justify; }
+    .signatures { margin-top: 45px; display: table; width: 100%; }
+    .sig-col { display: table-cell; width: 33%; text-align: center; vertical-align: top; padding: 0 10px; }
+    .sig-line { border-top: 1px solid #1e293b; padding-top: 6px; font-size: 9pt; }
+    @media print { body { padding: 0; } }
+  </style>
+</head>
+<body>
+  ${sheetElement.innerHTML}
+  <script>window.onload = function() { window.print(); };</script>
+</body>
+</html>`;
+
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   // Safe discrepancy count
@@ -576,11 +625,15 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
 
                             <td className="py-4 px-4 text-right">
                               <button
-                                onClick={() => setSelectedFactoringDoc(op)}
+                                onClick={() => {
+                                  setSelectedFactoringDoc(op);
+                                  setDocModalTab('pdf');
+                                  setPdfZoom(100);
+                                }}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0B2545] hover:bg-[#07192F] text-white text-xs font-semibold transition-colors shadow-sm"
                               >
                                 <Eye className="w-3.5 h-3.5" />
-                                <span>Ver Carta Cesión</span>
+                                <span>Ver Documento PDF</span>
                               </button>
                             </td>
                           </tr>
@@ -769,113 +822,390 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
         </div>
       )}
 
-      {/* ── MODAL DE VISUALIZACIÓN: CARTA DE CESIÓN DE FACTORING & CONSTANCIA CAVALI ── */}
+      {/* ── MODAL: VISOR DE DOCUMENTO PDF - CARTA NOTARIAL DE CESIÓN DE DERECHOS ── */}
       {selectedFactoringDoc && (
-        <div className="fixed inset-0 bg-[#0B2545]/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white border border-[#E2E7EE] rounded-2xl max-w-2xl w-full p-6 md:p-8 space-y-6 shadow-2xl relative my-8">
-            {/* Header Modal */}
-            <div className="flex items-center justify-between border-b border-[#E2E7EE] pb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-purple-100 text-purple-800">
-                  <ShieldCheck className="w-6 h-6" />
+        <div className="fixed inset-0 bg-[#0B1528]/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+          <div className="bg-[#1E293B] border border-slate-700 rounded-2xl max-w-5xl w-full h-[94vh] flex flex-col shadow-2xl overflow-hidden my-auto animate-fadeIn">
+            {/* 1. PDF Viewer Top Application Toolbar */}
+            <div className="bg-[#0F172A] px-4 py-3 border-b border-slate-700 flex flex-wrap items-center justify-between gap-3 text-white flex-shrink-0">
+              {/* Left: Document info */}
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-rose-600 text-white font-bold text-xs tracking-wider shadow-sm flex-shrink-0">
+                  PDF
                 </div>
-                <div>
-                  <h3 className="font-bold text-[#0B2545] text-base">
-                    Notificación Notarial de Cesión de Derechos Crediticios
+                <div className="min-w-0">
+                  <h3 className="font-bold text-slate-100 text-sm truncate flex items-center gap-2">
+                    <span>Carta_Cesion_Derechos_{selectedFactoringDoc.series}-{selectedFactoringDoc.number}.pdf</span>
+                    <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Firma Digital Válida
+                    </span>
                   </h3>
-                  <p className="text-xs text-[#5B6B7F]">
-                    Ley N° 29623 y Artículo 1215° del Código Civil Peruano
+                  <p className="text-[11px] text-slate-400 truncate">
+                    Documento adjuntado por proveedor • Anotación CAVALI: <span className="font-mono text-cyan-400">{selectedFactoringDoc.cavali_annotation_code || 'CAVALI-ANOT-998412-PE'}</span>
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => setSelectedFactoringDoc(null)}
-                className="text-[#5B6B7F] hover:text-[#0B2545] p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+
+              {/* Center: Tabs & Zoom Controls */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setDocModalTab('pdf')}
+                    className={`px-3 py-1.5 rounded-md font-semibold transition-colors flex items-center gap-1.5 ${
+                      docModalTab === 'pdf'
+                        ? 'bg-[#0A7469] text-white shadow'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Visor PDF</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDocModalTab('summary')}
+                    className={`px-3 py-1.5 rounded-md font-semibold transition-colors flex items-center gap-1.5 ${
+                      docModalTab === 'summary'
+                        ? 'bg-[#0A7469] text-white shadow'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Ficha Resumen</span>
+                  </button>
+                </div>
+
+                {docModalTab === 'pdf' && (
+                  <div className="hidden md:flex items-center bg-slate-800 rounded-lg border border-slate-700 p-0.5 text-xs text-slate-300">
+                    <button
+                      type="button"
+                      onClick={() => setPdfZoom((z) => Math.max(70, z - 10))}
+                      title="Reducir zoom"
+                      className="p-1.5 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                    >
+                      <ZoomOut className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="px-2 font-mono text-[11px] min-w-[42px] text-center">{pdfZoom}%</span>
+                    <button
+                      type="button"
+                      onClick={() => setPdfZoom((z) => Math.min(150, z + 10))}
+                      title="Aumentar zoom"
+                      className="p-1.5 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                    >
+                      <ZoomIn className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPdfZoom(100)}
+                      title="Restablecer 100%"
+                      className="p-1.5 hover:text-white hover:bg-slate-700 rounded transition-colors border-l border-slate-700"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Right: Actions */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadFactoringPdf}
+                  title="Descargar documento PDF completo"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold border border-slate-700 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5 text-cyan-400" />
+                  <span className="hidden sm:inline">Descargar PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  title="Imprimir documento notarial"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold border border-slate-700 transition-colors"
+                >
+                  <Printer className="w-3.5 h-3.5 text-slate-300" />
+                  <span className="hidden sm:inline">Imprimir</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedFactoringDoc(null)}
+                  className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors ml-1"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
-            {/* Document Body */}
-            <div className="space-y-4 text-xs text-[#0B2545] bg-[#F8FAFC] p-5 rounded-xl border border-[#E2E7EE] font-sans leading-relaxed">
-              <div className="text-center font-bold text-sm tracking-wide text-[#0B2545] uppercase border-b border-[#E2E7EE] pb-2">
-                CONSTANCIA DE TRANSFERENCIA DE TÍTULO VALOR Y AVISO DE PAGO
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                <div className="p-3 bg-white rounded-lg border border-[#E2E7EE]">
-                  <span className="text-[10px] uppercase font-bold text-[#5B6B7F] block mb-0.5">Cedente (Proveedor)</span>
-                  <strong className="block text-xs">{selectedFactoringDoc.supplier_name}</strong>
-                  <span className="text-[11px] text-[#5B6B7F] font-mono">RUC: 20601234567</span>
-                </div>
-
-                <div className="p-3 bg-white rounded-lg border border-[#E2E7EE]">
-                  <span className="text-[10px] uppercase font-bold text-[#5B6B7F] block mb-0.5">Deudor Aceptante (Cliente)</span>
-                  <strong className="block text-xs">{clientName}</strong>
-                  <span className="text-[11px] text-[#5B6B7F] font-mono">RUC: {clientRuc}</span>
-                </div>
-              </div>
-
-              <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-                <span className="text-[10px] uppercase font-bold text-purple-700 block mb-0.5">
-                  Cesionario / Entidad de Factoring (Nuevo Titular Legítimo)
-                </span>
-                <strong className="block text-xs text-purple-950">
-                  {selectedFactoringDoc.financier_name || 'Infinanza Factoring S.A.C.'}
-                </strong>
-                <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-purple-800">
-                  <span>RUC: 20567891234</span>
-                  <span>•</span>
-                  <span>Cuenta Abono CCI: <strong>002-194-001234567890-44 (BCP MN)</strong></span>
-                </div>
-              </div>
-
-              {/* Invoice details */}
-              <div className="p-3 bg-white rounded-lg border border-[#E2E7EE] space-y-1.5">
-                <span className="text-[10px] uppercase font-bold text-[#5B6B7F] block">Detalle de la Factura Negociable Cedida</span>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                  <div>
-                    <span className="text-[#5B6B7F] block text-[10px]">Comprobante</span>
-                    <strong className="font-mono">{selectedFactoringDoc.series}-{selectedFactoringDoc.number}</strong>
+            {/* 2. PDF Viewer Document Canvas */}
+            <div className="flex-1 bg-[#334155] overflow-y-auto p-4 sm:p-8 flex justify-center">
+              {docModalTab === 'pdf' ? (
+                /* Authentically styled A4 PDF Sheet */
+                <div
+                  id="factoring-notarial-sheet"
+                  style={{ transform: `scale(${pdfZoom / 100})`, transformOrigin: 'top center' }}
+                  className="bg-white text-[#0B2545] shadow-2xl rounded-sm max-w-[820px] w-full p-8 sm:p-14 border border-slate-300 transition-transform font-serif leading-relaxed text-xs relative select-text min-h-[1080px]"
+                >
+                  {/* Watermark in background */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] select-none">
+                    <span className="text-8xl font-black rotate-[-35deg] text-slate-900 tracking-widest uppercase">
+                      CAVALI • NOTARIAL
+                    </span>
                   </div>
-                  <div>
-                    <span className="text-[#5B6B7F] block text-[10px]">Importe Nominal</span>
-                    <strong>{selectedFactoringDoc.currency} {selectedFactoringDoc.requested_amount?.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</strong>
+
+                  {/* Document Header (Notary & Cavali seal) */}
+                  <div className="border-b-2 border-slate-900 pb-4 mb-6">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                      <div>
+                        <h2 className="text-base sm:text-lg font-black tracking-wider text-slate-900 uppercase">
+                          NOTARÍA PÉREZ DE LOS RÍOS
+                        </h2>
+                        <p className="text-[11px] text-slate-600 font-sans mt-0.5">
+                          Dr. Javier Pérez de los Ríos • Notario de Lima • Matrícula CNL N° 142
+                        </p>
+                        <p className="text-[10px] text-slate-500 font-sans">
+                          Av. Canaval y Moreyra N° 480, Of. 601, San Isidro, Lima - Perú
+                        </p>
+                      </div>
+
+                      <div className="text-left sm:text-right font-sans text-[11px] bg-slate-50 p-2.5 rounded border border-slate-200">
+                        <div className="font-bold text-slate-800">EXPEDIENTE NOTARIAL: <span className="font-mono text-purple-900">NOT-2026-0098412</span></div>
+                        <div className="text-slate-600 text-[10px]">FECHA DE NOTIFICACIÓN: <strong>04/11/2026 10:35:48</strong></div>
+                        <div className="text-slate-600 text-[10px]">ANOTACIÓN CAVALI: <strong className="font-mono text-[#0A7469]">{selectedFactoringDoc.cavali_annotation_code || 'CAVALI-ANOT-998412-PE'}</strong></div>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[#5B6B7F] block text-[10px]">Fecha Vencimiento</span>
-                    <strong>{selectedFactoringDoc.due_date ? selectedFactoringDoc.due_date.slice(0, 10) : '2026-12-15'}</strong>
+
+                  {/* Document Main Legal Title */}
+                  <div className="text-center my-6">
+                    <h1 className="text-sm sm:text-base font-black text-slate-900 uppercase tracking-wide leading-snug">
+                      CARTA NOTARIAL DE CESIÓN DE DERECHOS CREDITICIOS Y NOTIFICACIÓN DE ANOTACIÓN EN CUENTA
+                    </h1>
+                    <p className="text-[10px] font-sans text-slate-600 uppercase tracking-wider mt-1">
+                      (Ley N° 29623, D.U. N° 013-2020 y Artículo 1215° del Código Civil Peruano)
+                    </p>
                   </div>
-                  <div>
-                    <span className="text-[#5B6B7F] block text-[10px]">Anotación CAVALI</span>
-                    <strong className="font-mono text-[#0A7469]">{selectedFactoringDoc.cavali_annotation_code || 'CAVALI-ANOT-998412'}</strong>
+
+                  {/* Recipient & Sender */}
+                  <div className="space-y-1.5 font-sans mb-6 text-xs bg-slate-50 p-3.5 rounded border border-slate-200">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase block">DESTINATARIO (DEUDOR ACEPTANTE):</span>
+                        <strong className="text-slate-900 text-xs block">{clientName}</strong>
+                        <span className="text-slate-600 text-[11px] font-mono">RUC: {clientRuc}</span>
+                        <span className="text-slate-500 text-[10px] block">Domicilio Fiscal registrado ante SUNAT</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase block">REMITENTE / CEDENTE (PROVEEDOR):</span>
+                        <strong className="text-slate-900 text-xs block">{selectedFactoringDoc.supplier_name || 'DISTRIBUIDORA DE ALIMENTOS DEL SUR S.A.C.'}</strong>
+                        <span className="text-slate-600 text-[11px] font-mono">RUC: 20601234567</span>
+                        <span className="text-slate-500 text-[10px] block">Emisor del Comprobante de Pago Electrónico</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Legal Body Paragraphs */}
+                  <div className="space-y-3.5 text-justify text-slate-800 leading-relaxed font-sans text-[11.5px]">
+                    <p>
+                      <strong>De nuestra consideración:</strong>
+                    </p>
+                    <p>
+                      Por medio del presente instrumento notarial, de conformidad con lo prescrito en el <strong>Artículo 1215° del Código Civil</strong> y los <strong>Artículos 3° y 7° de la Ley N° 29623</strong> (Ley que promueve el financiamiento a través de la Factura Negociable), cumplimos con <strong>NOTIFICAR FORMAL E IRREVOCABLEMENTE</strong> a ustedes que nuestra representada, en calidad de <strong>CEDENTE</strong>, ha celebrado un Contrato de Cesión de Derechos Crediticios y Operación de Factoring en favor de la entidad cesionaria:
+                    </p>
+
+                    {/* Cesionario Highlight */}
+                    <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-lg text-purple-950 font-sans my-3">
+                      <div className="flex items-center gap-2 font-bold text-xs">
+                        <Landmark className="w-4 h-4 text-purple-700" />
+                        <span>CESIONARIO: {selectedFactoringDoc.financier_name || 'Infinanza Factoring S.A.C.'}</span>
+                      </div>
+                      <div className="text-[11px] text-purple-900 mt-1 pl-6">
+                        <span>RUC: <strong>20567891234</strong></span> • <span>Empresa de Factoring registrada ante SBS y participante de CAVALI ICLV</span>
+                      </div>
+                    </div>
+
+                    <p>
+                      En virtud de la referida cesión, se han transferido a favor del Cesionario la totalidad de los derechos crediticios, titularidad económica y el mérito ejecutivo correspondientes a la Factura Negociable que se detalla a continuación:
+                    </p>
+
+                    {/* Table of Invoices */}
+                    <table className="w-full border-collapse border border-slate-300 my-3 font-sans text-xs">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-800 text-[10px] uppercase font-bold">
+                          <th className="border border-slate-300 p-2 text-left">Factura Electrónica</th>
+                          <th className="border border-slate-300 p-2 text-left">Emisión</th>
+                          <th className="border border-slate-300 p-2 text-left">Vencimiento</th>
+                          <th className="border border-slate-300 p-2 text-right">Monto Nominal</th>
+                          <th className="border border-slate-300 p-2 text-center">Anotación CAVALI</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="bg-white">
+                          <td className="border border-slate-300 p-2 font-mono font-bold text-slate-900">
+                            {selectedFactoringDoc.series}-{selectedFactoringDoc.number}
+                          </td>
+                          <td className="border border-slate-300 p-2 text-slate-600">
+                            03/11/2026
+                          </td>
+                          <td className="border border-slate-300 p-2 font-bold text-slate-800">
+                            {selectedFactoringDoc.due_date ? selectedFactoringDoc.due_date.slice(0, 10) : '2026-12-15'}
+                          </td>
+                          <td className="border border-slate-300 p-2 text-right font-bold text-slate-900">
+                            {selectedFactoringDoc.currency || 'PEN'} {selectedFactoringDoc.requested_amount?.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="border border-slate-300 p-2 text-center font-mono font-bold text-[#0A7469]">
+                            {selectedFactoringDoc.cavali_annotation_code || 'CAVALI-ANOT-998412'}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    {/* Bank Accounts Section */}
+                    <div className="p-3.5 bg-slate-50 border-2 border-purple-300 rounded-lg font-sans">
+                      <div className="text-[11px] font-bold text-slate-900 uppercase flex items-center gap-1.5 mb-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-purple-700" />
+                        <span>INSTRUCCIÓN EXCLUSIVA DE PAGO LIBERATORIO:</span>
+                      </div>
+                      <p className="text-[11px] text-slate-700 mb-2">
+                        El pago del comprobante indicado deberá realizarse única y exclusivamente mediante transferencia o abono a la cuenta corriente del <strong>CESIONARIO</strong>:
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] bg-white p-2.5 rounded border border-slate-200">
+                        <div>
+                          <span className="text-slate-500 block text-[10px]">Banco:</span>
+                          <strong>Banco de Crédito del Perú (BCP)</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 block text-[10px]">Titular:</span>
+                          <strong>{selectedFactoringDoc.financier_name || 'Infinanza Factoring S.A.C.'}</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 block text-[10px]">Cuenta Corriente:</span>
+                          <strong className="font-mono">194-0012345678-0-44</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 block text-[10px]">Código Interbancario (CCI):</span>
+                          <strong className="font-mono text-purple-900">002-194-001234567890-44</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Legal Warning Notice */}
+                    <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-950 text-[10.5px] font-sans leading-relaxed">
+                      <strong>EFECTO JURÍDICO VINCULANTE:</strong> Conforme al Artículo 1215° del Código Civil y el Artículo 7° de la Ley N° 29623, la presente notificación notarial surte plenos efectos frente a ustedes desde su recepción. Cualquier pago efectuado indebidamente al proveedor cedente o a terceros no surtirá efecto cancelatorio ni liberatorio respecto de la deuda, manteniéndose subsistente el derecho del Cesionario de iniciar las acciones cambiarias y ejecutivas correspondientes.
+                    </div>
+                  </div>
+
+                  {/* Signatures & Seals Block */}
+                  <div className="mt-10 pt-6 border-t border-slate-300 font-sans text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
+                      {/* Sig 1: Cedente */}
+                      <div className="flex flex-col items-center">
+                        <div className="h-14 flex items-end justify-center mb-1">
+                          <span className="font-cursive text-lg text-slate-700 italic select-none">Carlos Mendoza V.</span>
+                        </div>
+                        <div className="w-full border-t border-slate-400 pt-1 text-[10px] text-slate-600">
+                          <strong className="block text-slate-800">{selectedFactoringDoc.supplier_name || 'DISTRIBUIDORA DE ALIMENTOS DEL SUR S.A.C.'}</strong>
+                          <span>Representante Legal (Cedente)</span>
+                          <span className="block font-mono text-[9px] text-slate-400">Firmado digitalmente con UBL / DNIe</span>
+                        </div>
+                      </div>
+
+                      {/* Sig 2: Cesionario */}
+                      <div className="flex flex-col items-center">
+                        <div className="h-14 flex items-end justify-center mb-1">
+                          <span className="font-cursive text-lg text-purple-900 italic select-none">M. Arámbulo P.</span>
+                        </div>
+                        <div className="w-full border-t border-slate-400 pt-1 text-[10px] text-slate-600">
+                          <strong className="block text-purple-900">{selectedFactoringDoc.financier_name || 'Infinanza Factoring S.A.C.'}</strong>
+                          <span>Apoderado de Operaciones CAVALI</span>
+                          <span className="block font-mono text-[9px] text-slate-400">Constancia Desembolso Factoring</span>
+                        </div>
+                      </div>
+
+                      {/* Sig 3: Notario */}
+                      <div className="flex flex-col items-center">
+                        <div className="h-14 flex items-center justify-center mb-1">
+                          <div className="w-14 h-14 rounded-full border-2 border-red-700/60 flex items-center justify-center text-center p-1 text-[7px] text-red-800 font-bold uppercase rotate-[-8deg] select-none">
+                            NOTARÍA PÉREZ DE LOS RÍOS - LIMA
+                          </div>
+                        </div>
+                        <div className="w-full border-t border-slate-400 pt-1 text-[10px] text-slate-600">
+                          <strong className="block text-slate-800">Diligenciado Notarialmente</strong>
+                          <span>Notaría Pública de Lima</span>
+                          <span className="block font-mono text-[9px] text-[#0A7469]">SHA-256: 7f8a3d...90c4</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bottom Digital Timestamp */}
+                    <div className="mt-8 pt-2 border-t border-slate-200 flex flex-wrap items-center justify-between text-[9px] text-slate-400">
+                      <span>Documento electrónico con valor legal según Ley N° 27269 de Firmas y Certificados Digitales.</span>
+                      <span>Verificable en: <strong>cavali.com.pe/consultas/facturas-negociables</strong></span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                /* Tab 2: Ficha Resumen Estructurada */
+                <div className="bg-white rounded-xl border border-slate-200 p-6 max-w-2xl w-full h-fit space-y-4 text-xs font-sans">
+                  <div className="text-center font-bold text-sm tracking-wide text-[#0B2545] uppercase border-b border-[#E2E7EE] pb-2">
+                    CONSTANCIA DE TRANSFERENCIA DE TÍTULO VALOR Y AVISO DE PAGO
+                  </div>
 
-              {/* Legal Warning Notice */}
-              <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 text-amber-900 text-[11px] leading-relaxed">
-                <strong>Cláusula de Notificación Legal:</strong> Se hace de su conocimiento que la factura electrónica indicada ha sido válidamente transferida y anotada en la Institución de Compensación y Liquidación de Valores (CAVALI). En consecuencia, para surtir plenos efectos liberatorios, todo pago correspondiente a dicho título valor deberá ser cancelado de forma exclusiva e irrevocable en favor del Cesionario en la cuenta bancaria consignada.
-              </div>
-            </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                    <div className="p-3 bg-white rounded-lg border border-[#E2E7EE]">
+                      <span className="text-[10px] uppercase font-bold text-[#5B6B7F] block mb-0.5">Cedente (Proveedor)</span>
+                      <strong className="block text-xs">{selectedFactoringDoc.supplier_name}</strong>
+                      <span className="text-[11px] text-[#5B6B7F] font-mono">RUC: 20601234567</span>
+                    </div>
 
-            {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#0B2545] font-semibold text-xs transition-colors"
-              >
-                <Printer className="w-4 h-4" />
-                <span>Imprimir Notificación</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedFactoringDoc(null)}
-                className="px-5 py-2 rounded-xl bg-[#0B2545] hover:bg-[#07192F] text-white font-bold text-xs transition-colors shadow-sm"
-              >
-                Entendido
-              </button>
+                    <div className="p-3 bg-white rounded-lg border border-[#E2E7EE]">
+                      <span className="text-[10px] uppercase font-bold text-[#5B6B7F] block mb-0.5">Deudor Aceptante (Cliente)</span>
+                      <strong className="block text-xs">{clientName}</strong>
+                      <span className="text-[11px] text-[#5B6B7F] font-mono">RUC: {clientRuc}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
+                    <span className="text-[10px] uppercase font-bold text-purple-700 block mb-0.5">
+                      Cesionario / Entidad de Factoring (Nuevo Titular Legítimo)
+                    </span>
+                    <strong className="block text-xs text-purple-950">
+                      {selectedFactoringDoc.financier_name || 'Infinanza Factoring S.A.C.'}
+                    </strong>
+                    <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-purple-800">
+                      <span>RUC: 20567891234</span>
+                      <span>•</span>
+                      <span>Cuenta Abono CCI: <strong>002-194-001234567890-44 (BCP MN)</strong></span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-lg border border-[#E2E7EE] space-y-1.5">
+                    <span className="text-[10px] uppercase font-bold text-[#5B6B7F] block">Detalle de la Factura Negociable Cedida</span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                      <div>
+                        <span className="text-[#5B6B7F] block text-[10px]">Comprobante</span>
+                        <strong className="font-mono">{selectedFactoringDoc.series}-{selectedFactoringDoc.number}</strong>
+                      </div>
+                      <div>
+                        <span className="text-[#5B6B7F] block text-[10px]">Importe Nominal</span>
+                        <strong>{selectedFactoringDoc.currency} {selectedFactoringDoc.requested_amount?.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</strong>
+                      </div>
+                      <div>
+                        <span className="text-[#5B6B7F] block text-[10px]">Fecha Vencimiento</span>
+                        <strong>{selectedFactoringDoc.due_date ? selectedFactoringDoc.due_date.slice(0, 10) : '2026-12-15'}</strong>
+                      </div>
+                      <div>
+                        <span className="text-[#5B6B7F] block text-[10px]">Anotación CAVALI</span>
+                        <strong className="font-mono text-[#0A7469]">{selectedFactoringDoc.cavali_annotation_code || 'CAVALI-ANOT-998412'}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 text-amber-900 text-[11px] leading-relaxed">
+                    <strong>Cláusula de Notificación Legal:</strong> Se hace de su conocimiento que la factura electrónica indicada ha sido válidamente transferida y anotada en la Institución de Compensación y Liquidación de Valores (CAVALI). En consecuencia, para surtir plenos efectos liberatorios, todo pago correspondiente a dicho título valor deberá ser cancelado de forma exclusiva e irrevocable en favor del Cesionario en la cuenta bancaria consignada.
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
