@@ -1,18 +1,32 @@
 import React, { useState } from 'react';
 import { ArrowRight, Lock, User, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { FactumfluxClient } from '@factumflux/api-client';
 
 interface LoginScreenProps {
-  onLogin: (credentials: { ruc: string; email: string; name: string }) => void;
+  client?: FactumfluxClient;
+  onLogin: (credentials: {
+    ruc: string;
+    email: string;
+    name: string;
+    tenantId?: string;
+    tenantName?: string;
+    token?: string;
+  }) => void;
+  onSwitchToOnboarding?: () => void;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({
+  client,
+  onLogin,
+  onSwitchToOnboarding,
+}) => {
   const [ruc, setRuc] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!ruc || ruc.length !== 11) {
       setError('El RUC debe tener 11 dígitos numéricos válidos.');
@@ -26,14 +40,35 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
     setLoading(true);
     setError(null);
 
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      if (client) {
+        const res = await client.supplierLogin(ruc, email, password);
+        if (res && res.success) {
+          onLogin({
+            ruc: res.ruc,
+            email: res.user.email,
+            name: res.legal_name,
+            tenantId: res.tenant_id,
+            tenantName: res.tenant_name,
+            token: res.token,
+          });
+          return;
+        } else {
+          setError('Credenciales corporativas inválidas.');
+          return;
+        }
+      }
+
       onLogin({
         ruc,
         email,
         name: 'Portal Proveedor',
       });
-    }, 500);
+    } catch (err: any) {
+      setError(err.message || 'Error al autenticar con el portal.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -155,7 +190,20 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
             </div>
           </form>
 
-          <div className="mt-6 pt-5 border-t border-[#E2E7EE] text-center">
+          {onSwitchToOnboarding && (
+            <div className="mt-5 pt-4 border-t border-[#E2E7EE] text-center text-xs text-[#5B6B7F]">
+              <span>¿Recibió una invitación para unirse?</span>{' '}
+              <button
+                type="button"
+                onClick={onSwitchToOnboarding}
+                className="font-bold text-[#0A7469] hover:underline"
+              >
+                Activar cuenta de proveedor aquí &rarr;
+              </button>
+            </div>
+          )}
+
+          <div className="mt-4 pt-3 text-center">
             <div className="flex items-center justify-center gap-1.5 text-xs text-[#5B6B7F]">
               <CheckCircle2 className="w-4 h-4 text-[#0A7469]" />
               <span>Conexión cifrada de punto a punto & validación SUNAT activa</span>

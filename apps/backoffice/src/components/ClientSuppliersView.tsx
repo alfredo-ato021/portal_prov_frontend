@@ -150,13 +150,31 @@ export const ClientSuppliersView: React.FC<ClientSuppliersViewProps> = ({
     }
   };
 
+  const getSupplierPortalBaseUrl = () => {
+    const envUrl = (import.meta as any).env?.VITE_SUPPLIER_PORTAL_URL;
+    if (envUrl) return envUrl.replace(/\/$/, '');
+    if (typeof window !== 'undefined') {
+      const origin = window.location.origin;
+      // Cloud Run microfrontends: factumflux-backoffice-... -> factumflux-portal-proveedor-...
+      if (origin.includes('factumflux-backoffice')) {
+        return origin.replace('factumflux-backoffice', 'factumflux-portal-proveedor');
+      }
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return `${window.location.protocol}//${window.location.hostname}:5174`;
+      }
+      return origin;
+    }
+    return 'https://factumflux-portal-proveedor-pxeov3gtya-tl.a.run.app';
+  };
+
   const copyOnboardingLink = (ruc: string) => {
-    const inviteUrl = `${window.location.origin}/portal-proveedor?tenant=${tenantId}&ruc=${ruc}&ref=onboarding`;
+    const baseUrl = getSupplierPortalBaseUrl();
+    const inviteUrl = `${baseUrl}/?tenant=${encodeURIComponent(tenantId)}&ruc=${encodeURIComponent(ruc)}&ref=onboarding`;
     navigator.clipboard.writeText(inviteUrl);
     setSystemNotice({
       type: 'info',
       title: 'Enlace de Onboarding Copiado',
-      message: `Se copió al portapapeles el enlace de invitación para el proveedor RUC ${ruc}:\n\n${inviteUrl}\n\nEnvíele este enlace para que inicie sesión o complete su registro bancario y cargue facturas electrónicas.`,
+      message: `Se copió al portapapeles el enlace oficial de invitación para el proveedor RUC ${ruc}:\n\n${inviteUrl}\n\nEnvíele este enlace al proveedor para que active su cuenta, cree sus credenciales de acceso y cargue facturas electrónicas.`,
     });
   };
 

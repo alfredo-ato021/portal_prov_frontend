@@ -549,6 +549,60 @@ export class FactumfluxClient {
     });
   }
 
+  async getSupplierOnboardingInfo(tenantId: string, ruc: string): Promise<{
+    tenant_id: string;
+    tenant_name: string;
+    tenant_ruc: string;
+    ruc: string;
+    legal_name: string;
+    commercial_name?: string;
+    already_registered: boolean;
+    contact_email?: string;
+  }> {
+    return this.fetch(
+      `/api/v1/auth/supplier-onboarding/info?tenant=${encodeURIComponent(tenantId)}&ruc=${encodeURIComponent(ruc)}`
+    );
+  }
+
+  async supplierOnboarding(data: {
+    tenant_id: string;
+    ruc: string;
+    full_name: string;
+    email: string;
+    phone: string;
+    password: string;
+  }): Promise<{
+    success: boolean;
+    token: string;
+    tenant_id: string;
+    tenant_name: string;
+    supplier_id: string;
+    ruc: string;
+    legal_name: string;
+    user: { id: string; email: string; full_name: string };
+  }> {
+    return this.fetch('/api/v1/auth/supplier-onboarding', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async supplierLogin(ruc: string, email: string, password: string): Promise<{
+    success: boolean;
+    token: string;
+    tenant_id: string;
+    tenant_name: string;
+    supplier_id: string;
+    ruc: string;
+    legal_name: string;
+    user: { id: string; email: string; full_name: string };
+  }> {
+    return this.fetch('/api/v1/auth/supplier-login', {
+      method: 'POST',
+      body: JSON.stringify({ ruc, email, password }),
+    });
+  }
+
   async updateTenantStatus(tenantId: string, status: 'active' | 'suspended' | 'trial'): Promise<TenantSummary> {
     return this.fetch(`/api/admin/tenants/${tenantId}/status`, {
       method: 'PATCH',
