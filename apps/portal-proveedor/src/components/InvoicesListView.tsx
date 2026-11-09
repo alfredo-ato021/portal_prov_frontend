@@ -12,7 +12,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { FactumfluxClient, InvoiceSummary } from '@factumflux/api-client';
-import { SystemModal } from '@factumflux/ui';
+import { InvoiceDetailModal } from './InvoiceDetailModal';
 
 interface InvoicesListViewProps {
   client: FactumfluxClient;
@@ -25,7 +25,7 @@ export const InvoicesListView: React.FC<InvoicesListViewProps> = ({ client, onNa
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [paymentFilter, setPaymentFilter] = useState<string>('ALL');
-  const [selectedInvoiceDetails, setSelectedInvoiceDetails] = useState<InvoiceSummary | null>(null);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
 
   const loadInvoices = async () => {
     setLoading(true);
@@ -236,15 +236,19 @@ export const InvoicesListView: React.FC<InvoicesListViewProps> = ({ client, onNa
                 </tr>
               ) : (
                 filteredInvoices.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-[#F8FAFC] transition-colors">
+                  <tr
+                    key={inv.id}
+                    onClick={() => setSelectedInvoiceId(inv.id)}
+                    className="hover:bg-[#F8FAFC] transition-colors cursor-pointer group"
+                  >
                     {/* Voucher Series & Number */}
                     <td className="py-4 px-4">
                       <div className="flex items-center gap-2">
-                        <div className="p-2 rounded-lg bg-[#E8F4F2] text-[#0A7469]">
+                        <div className="p-2 rounded-lg bg-[#E8F4F2] text-[#0A7469] group-hover:bg-[#0A7469] group-hover:text-white transition-colors">
                           <FileText className="w-4 h-4" />
                         </div>
                         <div>
-                          <span className="font-bold text-[#0B2545] tracking-wide">
+                          <span className="font-bold text-[#0B2545] tracking-wide group-hover:text-[#0A7469] transition-colors">
                             {inv.series}-{inv.number}
                           </span>
                           <div className="flex items-center gap-1.5 mt-0.5">
@@ -309,9 +313,12 @@ export const InvoicesListView: React.FC<InvoicesListViewProps> = ({ client, onNa
                     {/* Action */}
                     <td className="py-4 px-4 text-right">
                       <button
-                        onClick={() => setSelectedInvoiceDetails(inv)}
-                        className="p-1.5 rounded-lg text-[#5B6B7F] hover:text-[#0B2545] hover:bg-[#F3F5F8] transition-colors"
-                        title="Ver detalle del comprobante"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedInvoiceId(inv.id);
+                        }}
+                        className="p-1.5 rounded-lg text-[#5B6B7F] hover:text-[#0A7469] hover:bg-[#E8F4F2] transition-colors"
+                        title="Ver detalle del comprobante y documentos"
                       >
                         <ExternalLink className="w-4 h-4" />
                       </button>
@@ -324,16 +331,12 @@ export const InvoicesListView: React.FC<InvoicesListViewProps> = ({ client, onNa
         </div>
       </div>
 
-      {/* ── MODAL DEL SISTEMA: DETALLES DEL COMPROBANTE ────────────────────── */}
-      {selectedInvoiceDetails && (
-        <SystemModal
-          isOpen={true}
-          type="info"
-          title={`Comprobante ${selectedInvoiceDetails.series}-${selectedInvoiceDetails.number}`}
-          message={`Detalles de emisión y procesamiento:\n\n• Estado SUNAT: ${selectedInvoiceDetails.sunat_status.toUpperCase()}\n• Estado de Proceso: ${selectedInvoiceDetails.processing_status || 'Recibido'}\n• Estado de Pago: ${selectedInvoiceDetails.payment_status || 'Pendiente'}\n• Verificación Criptográfica: Hash SHA-256 inmutable registrado.`}
-          confirmText="Entendido"
-          onConfirm={() => setSelectedInvoiceDetails(null)}
-          onCancel={() => setSelectedInvoiceDetails(null)}
+      {/* ── MODAL DEL SISTEMA: DETALLES Y VISUALIZADOR DE DOCUMENTOS ────────── */}
+      {selectedInvoiceId && (
+        <InvoiceDetailModal
+          invoiceId={selectedInvoiceId}
+          client={client}
+          onClose={() => setSelectedInvoiceId(null)}
         />
       )}
     </div>

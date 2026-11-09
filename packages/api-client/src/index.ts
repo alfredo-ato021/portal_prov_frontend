@@ -200,6 +200,28 @@ export interface InvoiceSummary {
   action_required_note?: string;
 }
 
+export interface InvoiceLineItemDetail {
+  id: string;
+  line_number: number;
+  item_code: string;
+  description: string;
+  unit_of_measure: string;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+  tax_amount: number;
+  total_amount: number;
+}
+
+export interface InvoiceDetail extends InvoiceSummary {
+  xml_sha256?: string;
+  has_pdf: boolean;
+  has_gre_pdf: boolean;
+  has_xml: boolean;
+  has_gre_xml: boolean;
+  items: InvoiceLineItemDetail[];
+}
+
 export interface PurchaseOrder {
   id: string;
   po_number: string;
@@ -820,6 +842,10 @@ export class FactumfluxClient {
     return this.fetch('/api/v1/backoffice/invoices');
   }
 
+  async getInvoiceDetail(invoiceId: string): Promise<InvoiceDetail> {
+    return this.fetch(`/api/v1/backoffice/invoices/${encodeURIComponent(invoiceId)}`);
+  }
+
   async validateSUNAT(invoiceId: string): Promise<any> {
     return this.fetch(`/api/v1/backoffice/invoices/${invoiceId}/validate-sunat`, {
       method: 'POST',
@@ -942,6 +968,65 @@ export class FactumfluxClient {
   async listSupplierInvoices(): Promise<InvoiceSummary[]> {
     const query = this.supplierRuc ? `?supplier_ruc=${encodeURIComponent(this.supplierRuc)}` : '';
     return this.fetch(`/api/v1/supplier/invoices${query}`);
+  }
+
+  async getSupplierInvoiceDetail(invoiceId: string): Promise<InvoiceDetail> {
+    const query = this.supplierRuc ? `?supplier_ruc=${encodeURIComponent(this.supplierRuc)}` : '';
+    return this.fetch(`/api/v1/supplier/invoices/${encodeURIComponent(invoiceId)}${query}`);
+  }
+
+  getInvoicePdfUrl(invoiceId: string, isSupplier: boolean = true): string {
+    const base = isSupplier ? '/api/v1/supplier/invoices' : '/api/v1/backoffice/invoices';
+    const params = new URLSearchParams();
+    if (this.tenantId) params.append('tenant', this.tenantId);
+    if (this.supplierRuc && isSupplier) params.append('supplier_ruc', this.supplierRuc);
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    return `${this.baseUrl}${base}/${encodeURIComponent(invoiceId)}/pdf${queryString}`;
+  }
+
+  getInvoiceGrePdfUrl(invoiceId: string, isSupplier: boolean = true): string {
+    const base = isSupplier ? '/api/v1/supplier/invoices' : '/api/v1/backoffice/invoices';
+    const params = new URLSearchParams();
+    if (this.tenantId) params.append('tenant', this.tenantId);
+    if (this.supplierRuc && isSupplier) params.append('supplier_ruc', this.supplierRuc);
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    return `${this.baseUrl}${base}/${encodeURIComponent(invoiceId)}/gre-pdf${queryString}`;
+  }
+
+  async fetchInvoicePdfBlob(invoiceId: string, isSupplier: boolean = true): Promise<Blob> {
+    const url = this.getInvoicePdfUrl(invoiceId, isSupplier);
+    const headers: Record<string, string> = {};
+    if (this.tenantId) headers['X-Tenant-Id'] = this.tenantId;
+    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+    if (this.supplierRuc && isSupplier) headers['X-Supplier-RUC'] = this.supplierRuc;
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      let errorMsg = `HTTP Error ${response.status}: ${response.statusText}`;
+      try {
+        const errorJson = await response.json();
+        errorMsg = errorJson.error || errorJson.message || errorMsg;
+      } catch {}
+      throw new Error(errorMsg);
+    }
+    return response.blob();
+  }
+
+  async fetchInvoiceGrePdfBlob(invoiceId: string, isSupplier: boolean = true): Promise<Blob> {
+    const url = this.getInvoiceGrePdfUrl(invoiceId, isSupplier);
+    const headers: Record<string, string> = {};
+    if (this.tenantId) headers['X-Tenant-Id'] = this.tenantId;
+    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+    if (this.supplierRuc && isSupplier) headers['X-Supplier-RUC'] = this.supplierRuc;
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      let errorMsg = `HTTP Error ${response.status}: ${response.statusText}`;
+      try {
+        const errorJson = await response.json();
+        errorMsg = errorJson.error || errorJson.message || errorMsg;
+      } catch {}
+      throw new Error(errorMsg);
+    }
+    return response.blob();
   }
 
   async listSupplierPurchaseOrders(): Promise<SupplierPurchaseOrder[]> {
