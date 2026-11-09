@@ -25,6 +25,7 @@ import { SireAndNegotiableUnifiedView } from './components/SireAndNegotiableUnif
 import { ClientSuppliersView } from './components/ClientSuppliersView';
 import { ClientIntegrationsView } from './components/ClientIntegrationsView';
 import { SuperAdminConsoleView } from './components/SuperAdminConsoleView';
+import { PurchaseOrderDetailModal } from './components/PurchaseOrderDetailModal';
 import { SystemModal, SystemModalType } from '@factumflux/ui';
 
 const apiBaseUrl =
@@ -82,6 +83,7 @@ export default function App() {
   // Invoices & Orders state
   const [invoices, setInvoices] = useState<InvoiceSummary[]>([]);
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
+  const [selectedPOId, setSelectedPOId] = useState<string | null>(null);
   const [policy, setPolicy] = useState<TenantPolicy | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -608,33 +610,127 @@ export default function App() {
                 <table className="w-full text-left">
                   <thead>
                     <tr className="border-b border-[#E2E7EE] bg-[#F8FAFC] text-[#5B6B7F] uppercase tracking-wider font-semibold">
-                      <th className="py-3 px-4">Orden</th>
+                      <th className="py-3 px-4">Orden / Tipo</th>
                       <th className="py-3 px-4">Proveedor</th>
                       <th className="py-3 px-4">Fecha Emisión</th>
-                      <th className="py-3 px-4">Monto Total</th>
-                      <th className="py-3 px-4">Estado ERP</th>
+                      <th className="py-3 px-4 text-right">Monto Total</th>
+                      <th className="py-3 px-4">Recepción Física (Cantidades)</th>
+                      <th className="py-3 px-4">Recepción Valorizada (Monto)</th>
+                      <th className="py-3 px-4">Facturación</th>
+                      <th className="py-3 px-4 text-center">Estado ERP</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E2E7EE] text-[#0B2545]">
                     {orders.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="py-12 text-center text-[#5B6B7F]">
+                        <td colSpan={8} className="py-12 text-center text-[#5B6B7F]">
                           No hay órdenes de compra registradas. Utilice "Ingesta Masiva" o descargue la plantilla Excel (.xlsx).
                         </td>
                       </tr>
                     ) : (
                       orders.map((po) => (
-                        <tr key={po.id} className="hover:bg-[#F8FAFC]/80 transition-colors">
-                          <td className="py-3 px-4 font-mono font-bold text-[#0A7469]">{po.po_number}</td>
+                        <tr
+                          key={po.id}
+                          onClick={() => setSelectedPOId(po.id || po.po_number)}
+                          className="hover:bg-[#E8F4F2]/50 transition-colors cursor-pointer group"
+                          title="Haga clic para ver el detalle de ítems, recepciones MIGO/HES y facturas vinculadas"
+                        >
+                          <td className="py-3 px-4">
+                            <div className="font-mono font-bold text-[#0A7469] group-hover:underline">
+                              {po.po_number}
+                            </div>
+                            {po.order_type && (
+                              <span
+                                className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase mt-0.5 ${
+                                  po.order_type === 'BIEN'
+                                    ? 'bg-[#E8F4F2] text-[#0A7469]'
+                                    : 'bg-[#EFF8FF] text-[#175CD3]'
+                                }`}
+                              >
+                                {po.order_type}
+                              </span>
+                            )}
+                          </td>
                           <td className="py-3 px-4">
                             <span className="text-[#0B2545] block font-medium">{po.supplier_name}</span>
                             <span className="text-[10px] text-[#5B6B7F] font-mono">RUC: {po.supplier_ruc}</span>
                           </td>
                           <td className="py-3 px-4 text-[#5B6B7F]">{po.issue_date}</td>
-                          <td className="py-3 px-4 font-bold text-[#0B2545]">
+                          <td className="py-3 px-4 text-right font-bold text-[#0B2545]">
                             {po.currency} {(po.total_amount || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                           </td>
                           <td className="py-3 px-4">
+                            <div className="flex flex-col gap-1 min-w-[130px]">
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="font-mono text-[#0B2545]">
+                                  {po.total_received_qty || 0} / {po.total_ordered_qty || 0} UN
+                                </span>
+                                <span
+                                  className={`font-semibold ${
+                                    (po.qty_percentage || 0) >= 100
+                                      ? 'text-[#176B3F]'
+                                      : (po.qty_percentage || 0) > 0
+                                      ? 'text-[#B54708]'
+                                      : 'text-[#5B6B7F]'
+                                  }`}
+                                >
+                                  {po.qty_percentage || 0}%
+                                </span>
+                              </div>
+                              <div className="w-full bg-[#E2E7EE] h-1.5 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full transition-all duration-300 ${
+                                    (po.qty_percentage || 0) >= 100 ? 'bg-[#176B3F]' : 'bg-[#0A7469]'
+                                  }`}
+                                  style={{ width: `${Math.min(po.qty_percentage || 0, 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex flex-col gap-1 min-w-[140px]">
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="font-mono text-[#0B2545]">
+                                  {po.currency} {(po.total_received_amount || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                </span>
+                                <span
+                                  className={`font-semibold ${
+                                    (po.amount_percentage || 0) >= 100
+                                      ? 'text-[#176B3F]'
+                                      : (po.amount_percentage || 0) > 0
+                                      ? 'text-[#B54708]'
+                                      : 'text-[#5B6B7F]'
+                                  }`}
+                                >
+                                  {po.amount_percentage || 0}%
+                                </span>
+                              </div>
+                              <div className="w-full bg-[#E2E7EE] h-1.5 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full transition-all duration-300 ${
+                                    (po.amount_percentage || 0) >= 100 ? 'bg-[#176B3F]' : 'bg-[#0A7469]'
+                                  }`}
+                                  style={{ width: `${Math.min(po.amount_percentage || 0, 100)}%` }}
+                                />
+                              </div>
+                              {po.reception_doc && (
+                                <span className="text-[10px] text-[#5B6B7F] font-mono">
+                                  {po.reception_type === 'GR_MIGO' ? 'GR' : 'HES'}: {po.reception_doc}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex flex-col gap-0.5 text-[11px]">
+                              <span className="font-bold text-[#0B2545]">
+                                {po.currency} {(po.total_invoiced_amount || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                              </span>
+                              <span className="text-[10px] text-[#5B6B7F]">
+                                {po.invoices_count || 0} fact. ({po.invoiced_percentage || 0}%)
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-center">
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                               {po.status}
                             </span>
@@ -916,6 +1012,15 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── MODAL DE DETALLE DE ORDEN DE COMPRA (MIGO / HES / FACTURAS) ───── */}
+      {selectedPOId && (
+        <PurchaseOrderDetailModal
+          poId={selectedPOId}
+          client={client}
+          onClose={() => setSelectedPOId(null)}
+        />
       )}
 
       {/* ── MODAL DEL SISTEMA FACTUMFLUX (ALERTAS Y NOTIFICACIONES) ─────────── */}

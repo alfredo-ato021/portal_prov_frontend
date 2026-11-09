@@ -203,6 +203,7 @@ export interface InvoiceSummary {
 export interface PurchaseOrder {
   id: string;
   po_number: string;
+  order_type?: 'BIEN' | 'SERVICIO';
   supplier_ruc: string;
   supplier_name: string;
   issue_date: string;
@@ -212,6 +213,99 @@ export interface PurchaseOrder {
   total_amount: number;
   status: string;
   erp_reference?: string;
+
+  // Reception metrics
+  has_reception?: boolean;
+  reception_type?: 'GR_MIGO' | 'HES' | 'NONE';
+  reception_doc?: string;
+  reception_date?: string;
+  total_ordered_qty?: number;
+  total_received_qty?: number;
+  qty_percentage?: number;
+  total_received_amount?: number;
+  amount_percentage?: number;
+
+  // Invoice metrics
+  invoices_count?: number;
+  total_invoiced_amount?: number;
+  invoiced_percentage?: number;
+}
+
+export interface POItemDetail {
+  id: string;
+  line_number: number;
+  item_code: string;
+  description: string;
+  unit_of_measure: string;
+  quantity: number;
+  unit_price: number;
+  total_amount: number;
+  quantity_received: number;
+  received_amount: number;
+  qty_percentage: number;
+}
+
+export interface POGRItem {
+  id: string;
+  item_code: string;
+  quantity_received: number;
+  unit_price: number;
+  authorized_amount: number;
+}
+
+export interface POGoodsReceipt {
+  id: string;
+  receipt_number: string;
+  receipt_date: string;
+  erp_migo_number: string;
+  total_quantity_received: number;
+  total_authorized_amount: number;
+  items?: POGRItem[];
+}
+
+export interface POSESItem {
+  id: string;
+  item_code: string;
+  description: string;
+  quantity_received: number;
+  unit_price: number;
+  authorized_amount: number;
+}
+
+export interface POServiceEntry {
+  id: string;
+  ses_number: string;
+  approval_date: string;
+  total_amount: number;
+  currency: string;
+  erp_hes_number: string;
+  status: string;
+  quantity_received: number;
+  authorized_amount: number;
+  items?: POSESItem[];
+}
+
+export interface POInvoiceSummary {
+  id: string;
+  series: string;
+  number: string;
+  document_type: string;
+  issue_date: string;
+  currency: string;
+  subtotal: number;
+  tax_amount: number;
+  total_amount: number;
+  sunat_status: string;
+  state: string;
+  payment_status: string;
+  payment_scheduled_date?: string;
+}
+
+export interface PurchaseOrderDetail extends PurchaseOrder {
+  items?: POItemDetail[];
+  goods_receipts?: POGoodsReceipt[];
+  service_entry_sheets?: POServiceEntry[];
+  invoices?: POInvoiceSummary[];
 }
 
 export interface SupplierPurchaseOrder {
@@ -737,6 +831,10 @@ export class FactumfluxClient {
 
   async listPurchaseOrders(): Promise<PurchaseOrder[]> {
     return this.fetch('/api/v1/backoffice/purchase-orders');
+  }
+
+  async getPurchaseOrderDetail(id: string): Promise<PurchaseOrderDetail> {
+    return this.fetch(`/api/v1/backoffice/purchase-orders/${encodeURIComponent(id)}`);
   }
 
   async downloadTemplate(type: string): Promise<Blob> {
