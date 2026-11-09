@@ -632,7 +632,7 @@ export default function App() {
                           </td>
                           <td className="py-3 px-4 text-[#5B6B7F]">{po.issue_date}</td>
                           <td className="py-3 px-4 font-bold text-[#0B2545]">
-                            {po.currency} {po.total_amount.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                            {po.currency} {(po.total_amount || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                           </td>
                           <td className="py-3 px-4">
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
