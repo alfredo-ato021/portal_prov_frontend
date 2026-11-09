@@ -13,9 +13,9 @@ export const ClientLoginScreen: React.FC<ClientLoginScreenProps> = ({
   onLogin,
   onNavigateToSuperAdmin,
 }) => {
-  const [ruc, setRuc] = useState('20501234567');
-  const [email, setEmail] = useState('compras@trattoria.com.pe');
-  const [password, setPassword] = useState('Trattoria2026$$');
+  const [ruc, setRuc] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,47 +44,17 @@ export const ClientLoginScreen: React.FC<ClientLoginScreenProps> = ({
             email: res.user.email,
           });
           return;
+        } else {
+          setError('Credenciales corporativas inválidas.');
+          return;
         }
       }
-
-      // Fallback seguro si la red falla o modo offline
-      if (ruc === '20501234567' || ruc === '20512345678') {
-        onLogin({
-          tenantId: 'a1111111-1111-1111-1111-111111111111',
-          tenantName: 'La Bodega de la Trattoria S.A.C.',
-          email,
-        });
-      } else if (ruc === '20609876543') {
-        onLogin({
-          tenantId: 'b2222222-2222-2222-2222-222222222222',
-          tenantName: 'Corporación Alimentos RVA S.A.',
-          email,
-        });
-      } else {
-        onLogin({
-          tenantId: 'a1111111-1111-1111-1111-111111111111',
-          tenantName: 'Empresa Cliente',
-          email,
-        });
-      }
+      setError('Servicio de autenticación no disponible.');
     } catch (err: any) {
       setError(err.message || 'Error de autenticación corporativa.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSelectPreset = (preset: 'trattoria' | 'rva') => {
-    if (preset === 'trattoria') {
-      setRuc('20501234567');
-      setEmail('compras@trattoria.com.pe');
-      setPassword('Trattoria2026$$');
-    } else {
-      setRuc('20609876543');
-      setEmail('compras@corporacionrva.pe');
-      setPassword('RvaCorp2026$$');
-    }
-    setError(null);
   };
 
   return (
@@ -175,29 +145,6 @@ export const ClientLoginScreen: React.FC<ClientLoginScreenProps> = ({
                   placeholder="••••••••"
                   required
                 />
-              </div>
-            </div>
-
-            {/* Selector Rápido de Clientes Demo */}
-            <div className="p-3 bg-[#F8FAFC] rounded-xl border border-[#E2E7EE] space-y-1.5">
-              <span className="text-[11px] font-semibold text-[#5B6B7F] block">
-                Cargar credenciales de prueba:
-              </span>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleSelectPreset('trattoria')}
-                  className="flex-1 py-1.5 px-2 bg-white hover:bg-[#E8F4F2] border border-[#E2E7EE] hover:border-[#0A7469] rounded-lg text-[11px] font-semibold text-[#0B2545] transition-colors"
-                >
-                  Trattoria S.A.C.
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectPreset('rva')}
-                  className="flex-1 py-1.5 px-2 bg-white hover:bg-[#E8F4F2] border border-[#E2E7EE] hover:border-[#0A7469] rounded-lg text-[11px] font-semibold text-[#0B2545] transition-colors"
-                >
-                  Corp. RVA S.A.
-                </button>
               </div>
             </div>
 

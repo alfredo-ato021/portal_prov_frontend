@@ -6,9 +6,9 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
-  const [ruc, setRuc] = useState('20601234567');
-  const [email, setEmail] = useState('contacto@alisur.com.pe');
-  const [password, setPassword] = useState('demo12345');
+  const [ruc, setRuc] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,16 +31,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       onLogin({
         ruc,
         email,
-        name: ruc === '20601234567' ? 'Distribuidora de Alimentos del Sur S.A.C.' : 'Proveedor Industrial S.A.C.',
+        name: 'Portal Proveedor',
       });
     }, 500);
-  };
-
-  const handleDemoPreset = () => {
-    setRuc('20601234567');
-    setEmail('contacto@alisur.com.pe');
-    setPassword('demo12345');
-    setError(null);
   };
 
   return (
@@ -134,18 +127,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
               </div>
             </div>
 
-            <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center text-xs">
               <label className="flex items-center text-[#5B6B7F] hover:text-[#0B2545] cursor-pointer">
                 <input type="checkbox" defaultChecked className="rounded border-[#E2E7EE] text-[#0A7469] focus:ring-[#0A7469] mr-2" />
                 Recordar sesión
               </label>
-              <button
-                type="button"
-                onClick={handleDemoPreset}
-                className="text-[#0A7469] hover:text-[#075A52] underline font-semibold"
-              >
-                Cargar Demo Alisur
-              </button>
             </div>
 
             <div>

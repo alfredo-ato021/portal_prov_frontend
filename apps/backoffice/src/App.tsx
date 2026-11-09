@@ -41,10 +41,10 @@ const getSavedClientInfo = () => {
     // Ignore
   }
   return {
-    tenantId: 'a1111111-1111-1111-1111-111111111111',
-    tenantName: 'La Bodega de la Trattoria S.A.C.',
-    email: 'compras@trattoria.com.pe',
-    ruc: '20501234567',
+    tenantId: '',
+    tenantName: '',
+    email: '',
+    ruc: '',
   };
 };
 
@@ -69,7 +69,7 @@ export default function App() {
         : 'superadmin_login';
     }
 
-    return localStorage.getItem('factumflux_client_auth') === 'true'
+    return localStorage.getItem('factumflux_client_auth') === 'true' && !!initialClientInfo.tenantId
       ? 'client_portal'
       : 'client_login';
   });
