@@ -78,56 +78,7 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
     setLoadingFactoring(true);
     try {
       const data = await client.listFactoringOperations();
-      if (Array.isArray(data) && data.length > 0) {
-        setFactoringOps(data);
-      } else {
-        // Fallback realistic demo operations for testing
-        setFactoringOps([
-          {
-            id: 'fact-op-001',
-            tenant_id: 'a1111111-1111-1111-1111-111111111111',
-            invoice_id: 'inv-001',
-            supplier_id: 'sup-001',
-            series: 'F001',
-            number: '0004521',
-            supplier_name: 'DISTRIBUIDORA DE ALIMENTOS DEL SUR S.A.C.',
-            requested_amount: 14250.0,
-            currency: 'PEN',
-            discount_rate_pct: 1.85,
-            estimated_net_advance: 13943.62,
-            financier_name: 'Infinanza Factoring S.A.C.',
-            status: 'CAVALI_REGISTERED',
-            cavali_batch_id: 'BATCH-2026-0941',
-            cavali_annotation_code: 'CAVALI-ANOT-998412-PE',
-            due_date: '2026-12-15',
-            is_credit: true,
-            created_at: '2026-11-04T10:15:00Z',
-            updated_at: '2026-11-04T14:30:00Z',
-          },
-          {
-            id: 'fact-op-002',
-            tenant_id: 'a1111111-1111-1111-1111-111111111111',
-            invoice_id: 'inv-002',
-            supplier_id: 'sup-002',
-            series: 'F002',
-            number: '0000001',
-            supplier_name: 'ENVASES INDUSTRIALES DEL PERÚ E.I.R.L.',
-            requested_amount: 2500.0,
-            currency: 'PEN',
-            discount_rate_pct: 1.95,
-            estimated_net_advance: 2443.75,
-            financier_name: 'Primus Capital Perú S.A.',
-            status: 'DISBURSED',
-            cavali_batch_id: 'BATCH-2026-0889',
-            cavali_annotation_code: 'CAVALI-ANOT-882144-PE',
-            disbursed_at: '2026-11-03T16:45:00Z',
-            due_date: '2026-11-30',
-            is_credit: true,
-            created_at: '2026-11-02T09:00:00Z',
-            updated_at: '2026-11-03T16:45:00Z',
-          },
-        ]);
-      }
+      setFactoringOps(Array.isArray(data) ? data : []);
     } catch {
       setFactoringOps([]);
     } finally {
