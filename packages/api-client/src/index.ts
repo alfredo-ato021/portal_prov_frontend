@@ -718,9 +718,34 @@ export class FactumfluxClient {
     return this.fetch('/api/v1/backoffice/purchase-orders');
   }
 
+  async downloadTemplate(type: string): Promise<Blob> {
+    const url = `${this.baseUrl}/api/v1/backoffice/templates/${type}`;
+    const headers: Record<string, string> = {};
+    if (this.tenantId) {
+      headers['X-Tenant-Id'] = this.tenantId;
+    }
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      let errorMsg = `HTTP Error ${response.status}: ${response.statusText}`;
+      try {
+        const errorJson = await response.json();
+        errorMsg = errorJson.error || errorJson.message || errorMsg;
+      } catch {
+        // Fallback
+      }
+      throw new Error(errorMsg);
+    }
+    return response.blob();
+  }
+
   async uploadPurchaseOrdersCSV(file: File): Promise<IngestSummary> {
     const formData = new FormData();
     formData.append('csv_file', file);
+    formData.append('file', file);
+    formData.append('excel_file', file);
     return this.fetch('/api/v1/backoffice/purchase-orders/upload-csv', {
       method: 'POST',
       body: formData,
@@ -730,6 +755,8 @@ export class FactumfluxClient {
   async uploadGoodsReceiptsCSV(file: File): Promise<IngestSummary> {
     const formData = new FormData();
     formData.append('csv_file', file);
+    formData.append('file', file);
+    formData.append('excel_file', file);
     return this.fetch('/api/v1/backoffice/goods-receipts/upload-csv', {
       method: 'POST',
       body: formData,
@@ -739,6 +766,8 @@ export class FactumfluxClient {
   async uploadServiceEntrySheetsCSV(file: File): Promise<IngestSummary> {
     const formData = new FormData();
     formData.append('csv_file', file);
+    formData.append('file', file);
+    formData.append('excel_file', file);
     return this.fetch('/api/v1/backoffice/service-entry-sheets/upload-csv', {
       method: 'POST',
       body: formData,

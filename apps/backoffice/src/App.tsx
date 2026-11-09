@@ -116,37 +116,53 @@ export default function App() {
     });
   };
 
-  // CSV Template Downloader
-  const downloadCSVTemplate = (type: 'po' | 'gr' | 'ses') => {
-    let filename = '';
-    let content = '';
+  // Excel / CSV Template Downloader
+  const downloadTemplate = async (type: 'po' | 'gr' | 'ses') => {
+    const filenameXlsx =
+      type === 'po'
+        ? 'plantilla_ordenes_compra.xlsx'
+        : type === 'gr'
+        ? 'plantilla_entradas_almacen_migo.xlsx'
+        : 'plantilla_conformidades_servicio_hes.xlsx';
 
-    if (type === 'po') {
-      filename = 'plantilla_ordenes_compra.csv';
-      content =
-        'po_number,supplier_ruc,issue_date,currency,subtotal,tax_amount,total_amount,erp_reference,item_code,item_description,unit_of_measure,quantity,unit_price,item_total\r\n' +
-        'OC-2026-001,20601234567,2026-11-01,PEN,1000.00,180.00,1180.00,SAP-450001,ITEM-001,Suministro de Insumos Industriales,UND,10,100.00,1000.00\r\n' +
-        'OC-2026-002,20100070354,2026-11-02,PEN,2500.00,450.00,2950.00,SAP-450002,ITEM-002,Servicios de Mantenimiento y Calibración,GLB,1,2500.00,2500.00\r\n';
-    } else if (type === 'gr') {
-      filename = 'plantilla_entradas_almacen_migo.csv';
-      content =
-        'po_number,receipt_number,receipt_date,erp_migo_number\r\n' +
-        'OC-2026-001,GR-2026-0911,2026-11-02,5000123456\r\n' +
-        'OC-2026-001,GR-2026-0912,2026-11-03,5000123457\r\n';
-    } else {
-      filename = 'plantilla_hojas_servicio_hes.csv';
-      content =
-        'po_number,ses_number,approval_date,total_amount,currency,erp_hes_number,status\r\n' +
-        'OC-2026-002,HES-2026-0045,2026-11-03,2950.00,PEN,1000456789,approved\r\n';
+    try {
+      const blob = await client.downloadTemplate(type);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filenameXlsx;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // Fallback to CSV if network fails
+      let filenameCsv = '';
+      let content = '';
+      if (type === 'po') {
+        filenameCsv = 'plantilla_ordenes_compra.csv';
+        content =
+          'po_number,supplier_ruc,issue_date,currency,subtotal,tax_amount,total_amount,erp_reference,item_code,item_description,unit_of_measure,quantity,unit_price,item_total\r\n' +
+          'OC-2026-001,20600433700,01/11/2026,PEN,1000.00,180.00,1180.00,SAP-450001,ITEM-001,Suministro de Insumos Industriales,UND,10,100.00,1000.00\r\n' +
+          'OC-2026-002,20100070354,02/11/2026,PEN,2500.00,450.00,2950.00,SAP-450002,ITEM-002,Servicios de Mantenimiento y Calibración,GLB,1,2500.00,2500.00\r\n';
+      } else if (type === 'gr') {
+        filenameCsv = 'plantilla_entradas_almacen_migo.csv';
+        content =
+          'po_number,receipt_number,receipt_date,erp_migo_number\r\n' +
+          'OC-2026-001,GR-2026-0911,02/11/2026,5000123456\r\n' +
+          'OC-2026-001,GR-2026-0912,03/11/2026,5000123457\r\n';
+      } else {
+        filenameCsv = 'plantilla_hojas_servicio_hes.csv';
+        content =
+          'po_number,ses_number,approval_date,total_amount,currency,erp_hes_number,status\r\n' +
+          'OC-2026-002,HES-2026-0045,03/11/2026,2950.00,PEN,1000456789,approved\r\n';
+      }
+      const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filenameCsv;
+      link.click();
+      URL.revokeObjectURL(url);
     }
-
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
   };
 
   // Load Invoices & Orders
@@ -256,11 +272,11 @@ export default function App() {
       } else {
         res = await client.uploadServiceEntrySheetsCSV(file);
       }
-      setActionMessage(`Ingesta CSV exitosa: ${res.inserted_count} registros procesados.`);
+      setActionMessage(`Ingesta masiva exitosa: ${res.inserted_count} registros procesados.`);
       setIsIngestingCSV(false);
       await loadInvoicesAndOrders();
     } catch (err: any) {
-      showErrorModal('Error de Ingesta CSV', err.message || 'Error procesando archivo CSV.');
+      showErrorModal('Error de Ingesta Masiva', err.message || 'Error procesando archivo.');
     } finally {
       setIsUploadingCSV(false);
       if (csvFileInputRef.current) csvFileInputRef.current.value = '';
@@ -543,35 +559,35 @@ export default function App() {
                   <div className="relative group">
                     <button
                       type="button"
-                      onClick={() => downloadCSVTemplate('po')}
+                      onClick={() => downloadTemplate('po')}
                       className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#0B2545] font-semibold text-xs transition-all border border-[#E2E7EE]"
                     >
                       <Download className="w-4 h-4 text-[#0A7469]" />
-                      <span>Descargar Plantillas CSV</span>
+                      <span>Descargar Plantillas (.xlsx)</span>
                     </button>
                     <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-[#E2E7EE] rounded-xl shadow-lg p-2 hidden group-hover:block z-20 space-y-1">
                       <button
                         type="button"
-                        onClick={() => downloadCSVTemplate('po')}
+                        onClick={() => downloadTemplate('po')}
                         className="w-full text-left px-3 py-2 rounded-lg text-xs hover:bg-[#E8F4F2] text-[#0B2545] font-medium flex items-center justify-between"
                       >
-                        <span>Órdenes de Compra (.csv)</span>
+                        <span>Órdenes de Compra (.xlsx)</span>
                         <Download className="w-3.5 h-3.5 text-[#0A7469]" />
                       </button>
                       <button
                         type="button"
-                        onClick={() => downloadCSVTemplate('gr')}
+                        onClick={() => downloadTemplate('gr')}
                         className="w-full text-left px-3 py-2 rounded-lg text-xs hover:bg-[#E8F4F2] text-[#0B2545] font-medium flex items-center justify-between"
                       >
-                        <span>Entradas MIGO (.csv)</span>
+                        <span>Entradas MIGO (.xlsx)</span>
                         <Download className="w-3.5 h-3.5 text-[#0A7469]" />
                       </button>
                       <button
                         type="button"
-                        onClick={() => downloadCSVTemplate('ses')}
+                        onClick={() => downloadTemplate('ses')}
                         className="w-full text-left px-3 py-2 rounded-lg text-xs hover:bg-[#E8F4F2] text-[#0B2545] font-medium flex items-center justify-between"
                       >
-                        <span>Hojas HES (.csv)</span>
+                        <span>Conformidades HES (.xlsx)</span>
                         <Download className="w-3.5 h-3.5 text-[#0A7469]" />
                       </button>
                     </div>
@@ -582,7 +598,7 @@ export default function App() {
                     className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-semibold text-xs transition-all shadow-sm"
                   >
                     <UploadCloud className="w-4 h-4" />
-                    <span>Ingesta CSV (MIGO / HES)</span>
+                    <span>Ingesta Masiva (Excel / CSV)</span>
                   </button>
                 </div>
               </div>
@@ -603,7 +619,7 @@ export default function App() {
                     {orders.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="py-12 text-center text-[#5B6B7F]">
-                          No hay órdenes de compra registradas. Utilice "Ingesta CSV" o descargue la plantilla.
+                          No hay órdenes de compra registradas. Utilice "Ingesta Masiva" o descargue la plantilla Excel (.xlsx).
                         </td>
                       </tr>
                     ) : (
@@ -730,14 +746,14 @@ export default function App() {
         </main>
       </div>
 
-      {/* CSV Ingestion Modal */}
+      {/* Excel / CSV Ingestion Modal */}
       {isIngestingCSV && (
         <div className="fixed inset-0 bg-[#0B2545]/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white border border-[#E2E7EE] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-[#0B2545] flex items-center gap-2">
                 <FileSpreadsheet className="w-5 h-5 text-[#0A7469]" />
-                Ingesta Masiva de Recepciones CSV
+                Ingesta Masiva (Excel / CSV)
               </h3>
               <button onClick={() => setIsIngestingCSV(false)} className="text-[#5B6B7F] hover:text-[#0B2545]">
                 <X className="w-5 h-5" />
@@ -751,20 +767,20 @@ export default function App() {
                 onChange={(e) => setCsvType(e.target.value as any)}
                 className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
               >
-                <option value="po">Órdenes de Compra (purchase_orders.csv)</option>
-                <option value="gr">Entrada de Mercancías MIGO (goods_receipts.csv)</option>
-                <option value="ses">Hojas de Entrada de Servicios HES (service_entry_sheets.csv)</option>
+                <option value="po">Órdenes de Compra (.xlsx / .csv)</option>
+                <option value="gr">Entrada de Mercancías MIGO (.xlsx / .csv)</option>
+                <option value="ses">Hojas de Entrada de Servicios HES (.xlsx / .csv)</option>
               </select>
 
               <div className="flex items-center justify-between text-[11px] text-[#0A7469] bg-[#E8F4F2] p-2.5 rounded-lg border border-[#0A7469]/20">
-                <span>¿Requiere la estructura exacta?</span>
+                <span>¿Requiere la plantilla oficial?</span>
                 <button
                   type="button"
-                  onClick={() => downloadCSVTemplate(csvType)}
+                  onClick={() => downloadTemplate(csvType)}
                   className="font-bold underline hover:text-[#075A52] flex items-center gap-1"
                 >
                   <Download className="w-3 h-3" />
-                  <span>Descargar plantilla (.csv)</span>
+                  <span>Descargar plantilla Excel (.xlsx)</span>
                 </button>
               </div>
 
@@ -772,7 +788,7 @@ export default function App() {
                 <input
                   type="file"
                   ref={csvFileInputRef}
-                  accept=".csv"
+                  accept=".xlsx,.xls,.csv"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
                     if (f) handleCSVUpload(f);
@@ -786,11 +802,11 @@ export default function App() {
                   className="w-full py-3 px-4 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-bold flex items-center justify-center gap-2 shadow-sm transition-colors"
                 >
                   {isUploadingCSV ? (
-                    <span>Procesando archivo CSV...</span>
+                    <span>Procesando archivo (Excel / CSV)...</span>
                   ) : (
                     <>
                       <UploadCloud className="w-4 h-4" />
-                      <span>Seleccionar archivo CSV</span>
+                      <span>Seleccionar archivo Excel (.xlsx) o CSV</span>
                     </>
                   )}
                 </button>
