@@ -7,8 +7,15 @@ import {
   Copy,
   RefreshCw,
   X,
+  ShieldCheck,
+  AlertTriangle,
 } from 'lucide-react';
-import { FactumfluxClient, TenantSupplierItem, RegisterSupplierRequest } from '@factumflux/api-client';
+import {
+  FactumfluxClient,
+  TenantSupplierItem,
+  RegisterSupplierRequest,
+  SunatRucInfo,
+} from '@factumflux/api-client';
 import { SystemModal } from '@factumflux/ui';
 
 interface ClientSuppliersViewProps {
@@ -29,6 +36,9 @@ export const ClientSuppliersView: React.FC<ClientSuppliersViewProps> = ({
   // Register Supplier Modal
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isQueryingSunat, setIsQueryingSunat] = useState(false);
+  const [sunatInfo, setSunatInfo] = useState<SunatRucInfo | null>(null);
+  const [sunatError, setSunatError] = useState<string | null>(null);
   const [formData, setFormData] = useState<RegisterSupplierRequest>({
     ruc: '',
     legal_name: '',
@@ -37,6 +47,36 @@ export const ClientSuppliersView: React.FC<ClientSuppliersViewProps> = ({
     phone: '',
     payment_terms_days: 30,
   });
+
+  const handleLookupSunat = async (targetRuc?: string) => {
+    const rucToQuery = (targetRuc || formData.ruc).trim();
+    if (rucToQuery.length !== 11) {
+      setSunatError('El RUC debe tener exactamente 11 dígitos numéricos.');
+      return;
+    }
+    setIsQueryingSunat(true);
+    setSunatError(null);
+    try {
+      const res = await client.querySUNATRUC(rucToQuery);
+      if (res && res.is_valid) {
+        setSunatInfo(res);
+        setFormData((prev) => ({
+          ...prev,
+          ruc: res.ruc,
+          legal_name: res.legal_name || prev.legal_name,
+          commercial_name: res.commercial_name || prev.commercial_name,
+        }));
+      } else {
+        setSunatError(res.error_message || 'El RUC no es válido en el padrón de SUNAT.');
+        setSunatInfo(null);
+      }
+    } catch (err: any) {
+      setSunatError(err.message || 'No se pudo consultar el servicio oficial de SUNAT.');
+      setSunatInfo(null);
+    } finally {
+      setIsQueryingSunat(false);
+    }
+  };
 
   // System Modal Dialog state
   const [systemNotice, setSystemNotice] = useState<{
@@ -150,7 +190,19 @@ export const ClientSuppliersView: React.FC<ClientSuppliersViewProps> = ({
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
-            onClick={() => setIsRegisterModalOpen(true)}
+            onClick={() => {
+              setFormData({
+                ruc: '',
+                legal_name: '',
+                commercial_name: '',
+                contact_email: '',
+                phone: '',
+                payment_terms_days: 30,
+              });
+              setSunatInfo(null);
+              setSunatError(null);
+              setIsRegisterModalOpen(true);
+            }}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-bold text-xs transition-all shadow-md shadow-[#0A7469]/20"
           >
             <UserPlus className="w-4 h-4" />
@@ -326,30 +378,101 @@ export const ClientSuppliersView: React.FC<ClientSuppliersViewProps> = ({
                 <label className="block text-[#5B6B7F] font-semibold mb-1">
                   RUC SUNAT (11 dígitos) *
                 </label>
-                <input
-                  type="text"
-                  maxLength={11}
-                  required
-                  placeholder="ej. 20601234567"
-                  value={formData.ruc}
-                  onChange={(e) =>
-                    setFormData({ ...formData, ruc: e.target.value.replace(/\D/g, '') })
-                  }
-                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-[#0B2545] font-mono focus:outline-none focus:border-[#0A7469]"
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    maxLength={11}
+                    required
+                    placeholder="ej. 20601234567"
+                    value={formData.ruc}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setFormData({ ...formData, ruc: val });
+                      if (val.length === 11) {
+                        handleLookupSunat(val);
+                      } else {
+                        setSunatInfo(null);
+                        setSunatError(null);
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-[#0B2545] font-mono focus:outline-none focus:border-[#0A7469]"
+                  />
+                  <button
+                    type="button"
+                    disabled={isQueryingSunat || formData.ruc.length !== 11}
+                    onClick={() => handleLookupSunat()}
+                    className="px-3.5 py-2 rounded-xl bg-[#0B2545] hover:bg-[#07192F] text-white font-semibold flex items-center gap-1.5 transition-colors shrink-0 disabled:opacity-50"
+                    title="Consultar API oficial de SUNAT"
+                  >
+                    {isQueryingSunat ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Validando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Consultar SUNAT</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Banner de Verificación SUNAT */}
+                {sunatInfo && (
+                  <div className="mt-2.5 p-3 rounded-xl bg-emerald-50/90 border border-emerald-200 text-[11px] text-emerald-950 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 font-bold text-emerald-900">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        Validado Oficialmente con SUNAT
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                          {sunatInfo.status}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                          {sunatInfo.condition}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="font-semibold text-[#0B2545] text-xs pt-0.5">{sunatInfo.legal_name}</p>
+                    {sunatInfo.fiscal_address && (
+                      <p className="text-[#5B6B7F] text-[10px]">📍 Dirección Fiscal: {sunatInfo.fiscal_address}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Error de Verificación SUNAT */}
+                {sunatError && (
+                  <div className="mt-2.5 p-3 rounded-xl bg-rose-50 border border-rose-200 text-[11px] text-rose-800 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold block">Validación SUNAT no superada:</span>
+                      <span>{sunatError}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
-                <label className="block text-[#5B6B7F] font-semibold mb-1">
-                  Razón Social (Nombre Legal) *
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[#5B6B7F] font-semibold">
+                    Razón Social (Nombre Legal) *
+                  </label>
+                  {sunatInfo && (
+                    <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                      Autocompletado desde SUNAT
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   required
-                  placeholder="ej. DISTRIBUIDORA DE ALIMENTOS DEL SUR S.A.C."
+                  placeholder="Se autocompleta automáticamente al validar el RUC en SUNAT..."
                   value={formData.legal_name}
                   onChange={(e) => setFormData({ ...formData, legal_name: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-[#0B2545] focus:outline-none focus:border-[#0A7469]"
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-[#0B2545] focus:outline-none focus:border-[#0A7469] font-medium"
                 />
               </div>
 

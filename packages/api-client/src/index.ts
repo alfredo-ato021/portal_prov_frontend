@@ -330,6 +330,22 @@ export interface RegisterSupplierRequest {
   payment_terms_days?: number;
 }
 
+export interface SunatRucInfo {
+  ruc: string;
+  legal_name: string;
+  commercial_name?: string;
+  status: string;
+  condition: string;
+  fiscal_address?: string;
+  department?: string;
+  province?: string;
+  district?: string;
+  ubigeo?: string;
+  is_valid: boolean;
+  source?: string;
+  error_message?: string;
+}
+
 export interface TenantIntegrationsSettings {
   erp_type: string;
   erp_endpoint_url: string;
@@ -829,6 +845,10 @@ export class FactumfluxClient {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  }
+
+  async querySUNATRUC(ruc: string): Promise<SunatRucInfo> {
+    return this.fetch(`/api/v1/backoffice/sunat/ruc/${ruc}`);
   }
 
   // Tenant ERP & SIRE Integrations Configuration
