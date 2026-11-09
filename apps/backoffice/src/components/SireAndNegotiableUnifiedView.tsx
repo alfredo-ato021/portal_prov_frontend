@@ -35,12 +35,11 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
   clientRuc = '20614201691',
   clientName = 'PRUEBA S.A.C.',
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'negotiable' | 'sire'>('negotiable');
-  const [negotiableSubSection, setNegotiableSubSection] = useState<'alerts' | 'factoring'>('alerts');
+  const [activeTab, setActiveTab] = useState<'sire' | 'factoring'>('sire');
 
   // Negotiable alerts state
   const [alerts, setAlerts] = useState<NegotiableAlertItem[]>([]);
-  const [loadingAlerts, setLoadingAlerts] = useState(true);
+  const [, setLoadingAlerts] = useState(true);
 
   // Factoring operations state
   const [factoringOps, setFactoringOps] = useState<FactoringOperation[]>([]);
@@ -55,7 +54,13 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
   const [isComparingSire, setIsComparingSire] = useState(false);
 
   // System Modal Dialog state
-  const [disconformityTarget, setDisconformityTarget] = useState<NegotiableAlertItem | null>(null);
+  const [disconformityTarget, setDisconformityTarget] = useState<{
+    series?: string;
+    number?: string;
+    supplier_name?: string;
+    supplier_ruc?: string;
+    total_amount?: number;
+  } | null>(null);
   const [systemNotice, setSystemNotice] = useState<{
     title: string;
     message: string;
@@ -112,74 +117,104 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
     handleCompareSire();
   }, [client]);
 
-  // Format and safely calculate deadline date
-  const formatDeadline = (item: NegotiableAlertItem) => {
-    const raw = item.presumed_conformity_deadline || item.conformity_deadline;
-    if (raw) {
-      const d = new Date(raw);
+  const getUrgencyBadgeForDate = (issueDateStr?: string, deadlineStr?: string) => {
+    let days = 8;
+    if (deadlineStr) {
+      const d = new Date(deadlineStr);
       if (!isNaN(d.getTime())) {
-        return d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        days = Math.max(0, Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+      }
+    } else if (issueDateStr) {
+      const d = new Date(issueDateStr);
+      if (!isNaN(d.getTime())) {
+        const dl = new Date(d);
+        dl.setDate(dl.getDate() + 8);
+        days = Math.max(0, Math.ceil((dl.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
       }
     }
-    if (item.issue_date) {
-      const d = new Date(item.issue_date);
-      if (!isNaN(d.getTime())) {
-        d.setDate(d.getDate() + 8);
-        return d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    if (days <= 0) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#E7F5EC] text-[#176B3F] border border-[#176B3F]/20">
+          <CheckCircle2 className="w-3 h-3" />
+          Conformidad Presunta
+        </span>
+      );
+    }
+    if (days <= 2) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#FDECEA] text-[#B42318] border border-[#B42318]/20 animate-pulse">
+          <AlertTriangle className="w-3 h-3" />
+          ¡Urgente! {days} día(s)
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#FDF3DC] text-[#8A5A00] border border-[#8A5A00]/20">
+        <Clock className="w-3 h-3" />
+        {days} días restantes
+      </span>
+    );
+  };
+
+  // Unified table items combining SIRE discrepancies and negotiable alerts
+  const combinedRecords = React.useMemo(() => {
+    const list: Array<{
+      id: string;
+      document_number: string;
+      supplier_name: string;
+      supplier_ruc: string;
+      issue_date: string;
+      sire_amount?: number;
+      factumflux_amount?: number;
+      difference?: number;
+      issue_type: 'MISSING_IN_LOCAL' | 'MISSING_IN_SIRE' | 'AMOUNT_MISMATCH' | 'MATCH';
+      deadline_date?: string;
+    }> = [];
+
+    const seenDocs = new Set<string>();
+
+    if (sireData?.discrepancies && sireData.discrepancies.length > 0) {
+      for (const d of sireData.discrepancies) {
+        const docNum = d.document_number || d.document_ref || 'F001-0000000';
+        seenDocs.add(docNum);
+        list.push({
+          id: `sire-${docNum}`,
+          document_number: docNum,
+          supplier_name: (d as any).supplier_name || 'DISTRIBUIDORA DE ALIMENTOS DEL SUR S.A.C.',
+          supplier_ruc: d.supplier_ruc || '20601234567',
+          issue_date: d.issue_date || `${sirePeriod}-03`,
+          sire_amount: d.sire_amount ?? d.sire_total,
+          factumflux_amount: d.factumflux_amount ?? d.portal_total,
+          difference: d.difference,
+          issue_type: (d.issue_type || 'MISSING_IN_LOCAL') as any,
+        });
       }
     }
-    return '8 días de emisión';
-  };
 
-  // Safe days calculation
-  const getDaysRemaining = (item: NegotiableAlertItem) => {
-    if (item.days_remaining !== undefined && !isNaN(item.days_remaining)) {
-      return item.days_remaining;
-    }
-    const raw = item.presumed_conformity_deadline || item.conformity_deadline;
-    if (raw) {
-      const d = new Date(raw);
-      if (!isNaN(d.getTime())) {
-        return Math.max(0, Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+    if (alerts && alerts.length > 0) {
+      for (const al of alerts) {
+        const docNum = `${al.series}-${al.number}`;
+        if (!seenDocs.has(docNum)) {
+          seenDocs.add(docNum);
+          list.push({
+            id: `alert-${al.id || docNum}`,
+            document_number: docNum,
+            supplier_name: al.supplier_name,
+            supplier_ruc: al.supplier_ruc,
+            issue_date: al.issue_date,
+            sire_amount: al.total_amount,
+            factumflux_amount: undefined,
+            difference: al.total_amount,
+            issue_type: 'MISSING_IN_LOCAL',
+            deadline_date: al.presumed_conformity_deadline || al.conformity_deadline,
+          });
+        }
       }
     }
-    return 8;
-  };
 
-  const getUrgencyBadge = (item: NegotiableAlertItem) => {
-    const days = getDaysRemaining(item);
-    const urgency = item.status_urgency || (days <= 0 ? 'CONFORMITY_PRESUMED' : days <= 2 ? 'URGENT' : 'WARNING');
-
-    switch (urgency) {
-      case 'URGENT':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-[#FDECEA] text-[#B42318] border border-[#B42318]/20 animate-pulse">
-            <AlertTriangle className="w-3.5 h-3.5" />
-            ¡Urgente! {days} día(s) restante(s)
-          </span>
-        );
-      case 'WARNING':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#FDF3DC] text-[#8A5A00] border border-[#8A5A00]/20">
-            <Clock className="w-3.5 h-3.5" />
-            {days} días restantes
-          </span>
-        );
-      case 'CONFORMITY_PRESUMED':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#E7F5EC] text-[#176B3F] border border-[#176B3F]/20">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            Conformidad Presunta Irrevocable
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#F3F5F8] text-[#5B6B7F]">
-            {days} días
-          </span>
-        );
-    }
-  };
+    return list;
+  }, [sireData, alerts, sirePeriod]);
 
   // Official SUNAT SIRE TXT Conformity Generator (Resolución 000112-2021/SUNAT)
   const handleDownloadSireConformityTXT = () => {
@@ -322,286 +357,40 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
           </p>
         </div>
 
-        {/* SubTab switcher */}
+        {/* Main Tab Switcher: Only 2 direct tabs, NO SUBTABS */}
         <div className="flex items-center p-1 bg-white border border-[#E2E7EE] rounded-xl shadow-sm">
           <button
-            onClick={() => setActiveSubTab('negotiable')}
+            onClick={() => setActiveTab('sire')}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-              activeSubTab === 'negotiable'
+              activeTab === 'sire'
                 ? 'bg-[#0A7469] text-white shadow-sm'
                 : 'text-[#5B6B7F] hover:text-[#0B2545]'
             }`}
           >
-            Facturas Negociables & Factoring
+            Conciliación SIRE & Plazo Preventivo 8 Días
           </button>
           <button
-            onClick={() => setActiveSubTab('sire')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-              activeSubTab === 'sire'
+            onClick={() => setActiveTab('factoring')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
+              activeTab === 'factoring'
                 ? 'bg-[#0A7469] text-white shadow-sm'
                 : 'text-[#5B6B7F] hover:text-[#0B2545]'
             }`}
           >
-            Conciliación SIRE (SUNAT)
+            <Landmark className="w-3.5 h-3.5" />
+            <span>Facturas Cedidas a Factoring</span>
+            {factoringOps.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-[#4FC9BE] text-slate-900 font-extrabold">
+                {factoringOps.length}
+              </span>
+            )}
           </button>
         </div>
       </div>
 
-      {/* SUBTAB 1: Facturas Negociables (Ley 29623 y Factoring) */}
-      {activeSubTab === 'negotiable' && (
-        <div className="space-y-4">
-          {/* Sub-navigation between 8-Day alerts and Factoring operations */}
-          <div className="flex items-center gap-3 border-b border-[#E2E7EE] pb-2">
-            <button
-              onClick={() => setNegotiableSubSection('alerts')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-2 ${
-                negotiableSubSection === 'alerts'
-                  ? 'bg-[#0B2545] text-white'
-                  : 'text-[#5B6B7F] hover:bg-slate-100'
-              }`}
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span>Plazo Preventivo 8 Días Ley 29623</span>
-              {alerts.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-400 text-slate-900 font-extrabold">
-                  {alerts.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setNegotiableSubSection('factoring')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-2 ${
-                negotiableSubSection === 'factoring'
-                  ? 'bg-[#0B2545] text-white'
-                  : 'text-[#5B6B7F] hover:bg-slate-100'
-              }`}
-            >
-              <Landmark className="w-3.5 h-3.5" />
-              <span>Facturas Cedidas a Factoring (Cesión de Derechos)</span>
-              {factoringOps.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-[#4FC9BE] text-slate-900 font-extrabold">
-                  {factoringOps.length}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {negotiableSubSection === 'alerts' && (
-            <div className="space-y-4">
-              <div className="bg-[#E8F4F2] border border-[#0A7469]/20 rounded-2xl p-5 text-xs text-[#0B2545]">
-                <div className="flex items-start gap-3">
-                  <Clock className="w-5 h-5 text-[#0A7469] flex-shrink-0 mt-0.5" />
-                  <div>
-                    <strong className="text-[#0B2545] text-sm block mb-1">
-                      Plazo de Disconformidad de 8 Días Calendario (Ley 29623 / D.U. 013-2020)
-                    </strong>
-                    <p className="leading-relaxed text-[#5B6B7F]">
-                      Las facturas electrónicas al crédito registradas ante SUNAT adquieren mérito ejecutivo y
-                      pasan a anotación en cuenta en CAVALI a los <strong>8 días calendario</strong> de su emisión
-                      si la empresa adquirente no registra una disconformidad comercial justificada.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl border border-[#E2E7EE] overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-sm">
-                    <thead>
-                      <tr className="border-b border-[#E2E7EE] bg-[#F8FAFC] text-[#5B6B7F] text-xs uppercase tracking-wider">
-                        <th className="py-3.5 px-4 font-semibold">Comprobante</th>
-                        <th className="py-3.5 px-4 font-semibold">Proveedor</th>
-                        <th className="py-3.5 px-4 font-semibold">Emisión / Límite 8 Días</th>
-                        <th className="py-3.5 px-4 font-semibold">Monto Total</th>
-                        <th className="py-3.5 px-4 font-semibold">Estado del Plazo</th>
-                        <th className="py-3.5 px-4 font-semibold text-right">Acción</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#E2E7EE]">
-                      {loadingAlerts ? (
-                        <tr>
-                          <td colSpan={6} className="py-12 text-center text-[#5B6B7F]">
-                            Cargando alertas de facturas negociables...
-                          </td>
-                        </tr>
-                      ) : alerts.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="py-12 text-center text-[#5B6B7F]">
-                            No hay facturas al crédito con riesgo de vencimiento en el plazo de 8 días.
-                          </td>
-                        </tr>
-                      ) : (
-                        alerts.map((al) => (
-                          <tr key={al.id || al.invoice_id} className="hover:bg-[#F8FAFC] transition-colors">
-                            <td className="py-4 px-4 font-bold text-[#0B2545] tracking-wide">
-                              {al.series}-{al.number}
-                            </td>
-                            <td className="py-4 px-4">
-                              <span className="font-semibold text-[#0B2545] block text-xs">
-                                {al.supplier_name}
-                              </span>
-                              <span className="text-[11px] font-mono text-[#5B6B7F]">
-                                RUC: {al.supplier_ruc}
-                              </span>
-                            </td>
-                            <td className="py-4 px-4 text-xs">
-                              <div className="text-[#0B2545]">
-                                Emitido: {al.issue_date ? al.issue_date.slice(0, 10) : '-'}
-                              </div>
-                              <div className="text-[#0A7469] font-semibold mt-0.5">
-                                Límite: {formatDeadline(al)}
-                              </div>
-                            </td>
-                            <td className="py-4 px-4 font-bold text-[#0B2545] text-sm">
-                              {al.currency === 'PEN' ? 'S/' : '$'}{' '}
-                              {al.total_amount?.toLocaleString('es-PE', { minimumFractionDigits: 2 }) || '0.00'}
-                            </td>
-                            <td className="py-4 px-4">
-                              {getUrgencyBadge(al)}
-                            </td>
-                            <td className="py-4 px-4 text-right">
-                              <button
-                                onClick={() => setDisconformityTarget(al)}
-                                className="px-3 py-1.5 rounded-lg bg-[#FDECEA] hover:bg-[#FCD8D4] text-[#B42318] border border-[#B42318]/20 text-xs font-semibold transition-colors"
-                              >
-                                Registrar Disconformidad
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {negotiableSubSection === 'factoring' && (
-            <div className="space-y-4">
-              <div className="bg-purple-50 border border-purple-200 rounded-2xl p-5 text-xs text-purple-950">
-                <div className="flex items-start gap-3">
-                  <Landmark className="w-5 h-5 text-purple-700 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <strong className="text-purple-950 text-sm block mb-1">
-                      Registro y Notificación de Facturas Negociadas con Factoring (CAVALI)
-                    </strong>
-                    <p className="leading-relaxed text-purple-800">
-                      Consulte la relación de facturas cuyos derechos de crédito han sido transferidos por sus proveedores a empresas de factoring autorizadas. Visualice la carta notarial de cesión y el código de anotación en cuenta para dirigir el pago de forma segura y liberatoria.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl border border-[#E2E7EE] overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-[#E2E7EE] bg-[#F8FAFC] text-[#5B6B7F] uppercase tracking-wider font-semibold">
-                        <th className="py-3.5 px-4">Comprobante</th>
-                        <th className="py-3.5 px-4">Proveedor Cedente</th>
-                        <th className="py-3.5 px-4">Empresa de Factoring (Cesionario)</th>
-                        <th className="py-3.5 px-4">Monto Cedido</th>
-                        <th className="py-3.5 px-4">Código Anotación CAVALI</th>
-                        <th className="py-3.5 px-4">Estado Cesión</th>
-                        <th className="py-3.5 px-4 text-right">Carta de Cesión</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#E2E7EE] text-[#0B2545]">
-                      {loadingFactoring ? (
-                        <tr>
-                          <td colSpan={7} className="py-12 text-center text-[#5B6B7F]">
-                            Cargando facturas en factoring...
-                          </td>
-                        </tr>
-                      ) : factoringOps.length === 0 ? (
-                        <tr>
-                          <td colSpan={7} className="py-12 text-center text-[#5B6B7F]">
-                            No hay facturas negociadas con factoring para esta empresa.
-                          </td>
-                        </tr>
-                      ) : (
-                        factoringOps.map((op) => (
-                          <tr key={op.id} className="hover:bg-[#F8FAFC] transition-colors">
-                            <td className="py-4 px-4 font-bold text-[#0B2545] font-mono">
-                              {op.series ? `${op.series}-${op.number}` : 'F001-0004521'}
-                              <div className="text-[10px] text-[#5B6B7F] font-normal">
-                                Vcto: {op.due_date ? op.due_date.slice(0, 10) : '2026-12-15'}
-                              </div>
-                            </td>
-
-                            <td className="py-4 px-4">
-                              <span className="font-semibold text-[#0B2545] block">
-                                {op.supplier_name || 'DISTRIBUIDORA DE ALIMENTOS DEL SUR S.A.C.'}
-                              </span>
-                              <span className="text-[10px] font-mono text-[#5B6B7F]">RUC: 20601234567</span>
-                            </td>
-
-                            <td className="py-4 px-4">
-                              <span className="font-semibold text-purple-900 block flex items-center gap-1.5">
-                                <Landmark className="w-3.5 h-3.5 text-purple-600" />
-                                {op.financier_name || 'Infinanza Factoring S.A.C.'}
-                              </span>
-                              <span className="text-[10px] text-[#5B6B7F]">
-                                Tasa: {op.discount_rate_pct}% mes
-                              </span>
-                            </td>
-
-                            <td className="py-4 px-4 font-bold text-[#0B2545]">
-                              {op.currency || 'PEN'} {op.requested_amount?.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                            </td>
-
-                            <td className="py-4 px-4 font-mono text-[11px] text-[#0A7469] font-bold">
-                              {op.cavali_annotation_code || 'CAVALI-ANOT-PENDIENTE'}
-                            </td>
-
-                            <td className="py-4 px-4">
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                  op.status === 'DISBURSED'
-                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                    : op.status === 'CAVALI_REGISTERED'
-                                    ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                                    : 'bg-amber-50 text-amber-700 border border-amber-200'
-                                }`}
-                              >
-                                {op.status === 'DISBURSED'
-                                  ? 'Desembolsado'
-                                  : op.status === 'CAVALI_REGISTERED'
-                                  ? 'Anotado CAVALI'
-                                  : 'En Trámite'}
-                              </span>
-                            </td>
-
-                            <td className="py-4 px-4 text-right">
-                              <button
-                                onClick={() => {
-                                  setSelectedFactoringDoc(op);
-                                  setDocModalTab('pdf');
-                                  setPdfZoom(100);
-                                }}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0B2545] hover:bg-[#07192F] text-white text-xs font-semibold transition-colors shadow-sm"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                <span>Ver Documento PDF</span>
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* SUBTAB 2: Conciliación Cruzada SIRE (SUNAT) */}
-      {activeSubTab === 'sire' && (
-        <div className="space-y-5">
+      {/* ── TAB 1: CONCILIACIÓN SIRE & PLAZO PREVENTIVO 8 DÍAS (FUSIÓN COMPLETA EN 1 SOLA PÁGINA) ── */}
+      {activeTab === 'sire' && (
+        <div className="space-y-5 animate-fadeIn">
           {/* Controls Bar & TXT Export Actions */}
           <div className="bg-white rounded-2xl p-4 border border-[#E2E7EE] shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -644,6 +433,22 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
             </div>
           </div>
 
+          {/* Legal Explanatory Banner: Fusion SIRE + Plazo 8 Días */}
+          <div className="bg-[#E8F4F2] border border-[#0A7469]/20 rounded-2xl p-5 text-xs text-[#0B2545]">
+            <div className="flex items-start gap-3">
+              <Clock className="w-5 h-5 text-[#0A7469] flex-shrink-0 mt-0.5" />
+              <div>
+                <strong className="text-[#0B2545] text-sm block mb-1">
+                  Cotejo Mensual SIRE (SUNAT) y Monitoreo del Plazo de 8 Días Calendario (Ley 29623 / D.U. 013-2020)
+                </strong>
+                <p className="leading-relaxed text-[#5B6B7F]">
+                  Cruce automatizado entre las facturas de compras contabilizadas en su ERP y la propuesta RCE de SUNAT SIRE.
+                  Las facturas al crédito registradas ante SUNAT adquieren <strong>mérito ejecutivo</strong> y anotación irrevocable en CAVALI a los <strong>8 días calendario</strong>. Si identifica comprobantes no recibidos en almacén o con discrepancias comerciales, registre la disconformidad formal oportuna antes de que opere la conformidad presunta o descargue los archivos TXT oficiales para dar conformidad o disconformidad masiva en SUNAT SOL.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* SIRE Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div className="p-4 rounded-xl bg-white border border-[#E2E7EE] shadow-sm">
@@ -659,11 +464,11 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
               </strong>
             </div>
             <div className="p-4 rounded-xl bg-white border border-[#E2E7EE] shadow-sm">
-              <span className="text-[#5B6B7F] text-xs block mb-1">Coincidencia Exacta (Conforme)</span>
+              <span className="text-[#5B6B7F] text-xs block mb-1">Coincidencia Exacta (Match)</span>
               <strong className="text-xl font-bold text-[#176B3F]">{sireData?.matched_count ?? 0}</strong>
             </div>
             <div className="p-4 rounded-xl bg-white border border-[#E2E7EE] shadow-sm">
-              <span className="text-[#5B6B7F] text-xs block mb-1">Discrepancias / Faltantes</span>
+              <span className="text-[#5B6B7F] text-xs block mb-1">Discrepancias / Faltantes (Riesgo 8d)</span>
               <strong
                 className={`text-xl font-bold ${
                   discrepanciesCount > 0 ? 'text-[#B42318]' : 'text-[#176B3F]'
@@ -674,12 +479,12 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
             </div>
           </div>
 
-          {/* SIRE Comparison & Discrepancy Table */}
+          {/* Unified Comparison & Discrepancy Table */}
           <div className="bg-white rounded-2xl border border-[#E2E7EE] overflow-hidden shadow-sm">
             <div className="p-4 border-b border-[#E2E7EE] bg-[#F8FAFC] flex items-center justify-between">
               <h3 className="text-sm font-bold text-[#0B2545] flex items-center gap-2">
                 <GitCompare className="w-4 h-4 text-[#0A7469]" />
-                Cotejo Detallado: Facturas ERP vs. Propuesta SUNAT SIRE (RCE)
+                Relación Consolidada: Facturas ERP vs. Propuesta SUNAT SIRE (RCE)
               </h3>
               <span className="text-xs text-[#5B6B7F]">
                 Periodo: <strong>{sirePeriod}</strong>
@@ -691,29 +496,33 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
                 <thead>
                   <tr className="border-b border-[#E2E7EE] bg-[#F8FAFC] text-[#5B6B7F] uppercase font-semibold">
                     <th className="py-3 px-4">Comprobante</th>
-                    <th className="py-3 px-4">RUC Emisor</th>
-                    <th className="py-3 px-4">Fecha Emisión</th>
+                    <th className="py-3 px-4">Proveedor</th>
+                    <th className="py-3 px-4">Emisión / Límite 8 Días</th>
                     <th className="py-3 px-4">Monto SIRE (SUNAT)</th>
-                    <th className="py-3 px-4">Monto Contabilizado ERP</th>
-                    <th className="py-3 px-4">Diagnóstico / Cruce Tributario</th>
+                    <th className="py-3 px-4">Monto ERP</th>
+                    <th className="py-3 px-4">Diagnóstico / Cruce</th>
+                    <th className="py-3 px-4 text-right">Acción</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E2E7EE] text-[#0B2545]">
-                  {!sireData || !sireData.discrepancies || sireData.discrepancies.length === 0 ? (
+                  {combinedRecords.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-[#5B6B7F]">
-                        No se detectaron discrepancias para el periodo {sirePeriod}. Todas las facturas coinciden plenamente.
+                      <td colSpan={7} className="py-12 text-center text-[#5B6B7F]">
+                        No se detectaron comprobantes ni discrepancias para el periodo {sirePeriod}.
                       </td>
                     </tr>
                   ) : (
-                    sireData.discrepancies.map((disc, i) => {
-                      const isMissingInERP = disc.issue_type === 'MISSING_IN_LOCAL';
-                      const isMissingInSire = disc.issue_type === 'MISSING_IN_SIRE';
-                      const isMismatch = disc.issue_type === 'AMOUNT_MISMATCH';
+                    combinedRecords.map((rec) => {
+                      const isMissingInERP = rec.issue_type === 'MISSING_IN_LOCAL';
+                      const isMissingInSire = rec.issue_type === 'MISSING_IN_SIRE';
+                      const isMismatch = rec.issue_type === 'AMOUNT_MISMATCH';
+                      const isMatch = rec.issue_type === 'MATCH';
+
+                      const [ser, num] = rec.document_number.split('-');
 
                       return (
                         <tr
-                          key={i}
+                          key={rec.id}
                           className={`transition-colors ${
                             isMissingInERP
                               ? 'bg-amber-50/60 hover:bg-amber-100/50'
@@ -722,26 +531,36 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
                               : 'hover:bg-[#F8FAFC]'
                           }`}
                         >
-                          <td className="py-3 px-4 font-mono font-bold">
-                            {disc.document_number || disc.document_ref}
+                          <td className="py-3.5 px-4 font-mono font-bold">
+                            {rec.document_number}
                           </td>
-                          <td className="py-3 px-4 font-mono">{disc.supplier_ruc}</td>
-                          <td className="py-3 px-4">{disc.issue_date || '-'}</td>
-                          <td className="py-3 px-4 font-medium">
-                            {disc.sire_amount !== undefined
-                              ? `S/ ${disc.sire_amount.toFixed(2)}`
-                              : disc.sire_total !== undefined
-                              ? `S/ ${disc.sire_total.toFixed(2)}`
+                          <td className="py-3.5 px-4">
+                            <span className="font-semibold text-[#0B2545] block">
+                              {rec.supplier_name}
+                            </span>
+                            <span className="text-[11px] font-mono text-[#5B6B7F]">
+                              RUC: {rec.supplier_ruc}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="text-[#0B2545]">
+                              {rec.issue_date}
+                            </div>
+                            <div className="mt-0.5">
+                              {getUrgencyBadgeForDate(rec.issue_date, rec.deadline_date)}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 font-medium">
+                            {rec.sire_amount !== undefined
+                              ? `S/ ${rec.sire_amount.toFixed(2)}`
                               : '-'}
                           </td>
-                          <td className="py-3 px-4 font-medium">
-                            {disc.factumflux_amount !== undefined
-                              ? `S/ ${disc.factumflux_amount.toFixed(2)}`
-                              : disc.portal_total !== undefined
-                              ? `S/ ${disc.portal_total.toFixed(2)}`
+                          <td className="py-3.5 px-4 font-medium">
+                            {rec.factumflux_amount !== undefined
+                              ? `S/ ${rec.factumflux_amount.toFixed(2)}`
                               : '-'}
                           </td>
-                          <td className="py-3 px-4">
+                          <td className="py-3.5 px-4">
                             {isMissingInERP ? (
                               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-[#FDF3DC] text-[#8A5A00] border border-[#8A5A00]/30">
                                 <AlertTriangle className="w-3 h-3 text-[#8A5A00]" />
@@ -753,7 +572,7 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
                               </span>
                             ) : isMismatch ? (
                               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-300">
-                                Diferencia de Montos (Diff: S/ {disc.difference?.toFixed(2) || '0.00'})
+                                Diferencia de Montos (Diff: S/ {rec.difference?.toFixed(2) || '0.00'})
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300">
@@ -762,9 +581,152 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
                               </span>
                             )}
                           </td>
+                          <td className="py-3.5 px-4 text-right">
+                            {!isMatch ? (
+                              <button
+                                onClick={() =>
+                                  setDisconformityTarget({
+                                    series: ser || 'F001',
+                                    number: num || '0000001',
+                                    supplier_name: rec.supplier_name,
+                                    supplier_ruc: rec.supplier_ruc,
+                                    total_amount: rec.sire_amount || rec.factumflux_amount || 0,
+                                  })
+                                }
+                                className="px-3 py-1.5 rounded-lg bg-[#FDECEA] hover:bg-[#FCD8D4] text-[#B42318] border border-[#B42318]/20 text-xs font-semibold transition-colors"
+                              >
+                                Registrar Disconformidad
+                              </button>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold text-xs">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Conforme
+                              </span>
+                            )}
+                          </td>
                         </tr>
                       );
                     })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB 2: FACTURAS CEDIDAS A FACTORING (CESIÓN DE DERECHOS) (DIRECTA, SIN SUBPESTAÑAS) ── */}
+      {activeTab === 'factoring' && (
+        <div className="space-y-4 animate-fadeIn">
+          <div className="bg-purple-50 border border-purple-200 rounded-2xl p-5 text-xs text-purple-950">
+            <div className="flex items-start gap-3">
+              <Landmark className="w-5 h-5 text-purple-700 flex-shrink-0 mt-0.5" />
+              <div>
+                <strong className="text-purple-950 text-sm block mb-1">
+                  Registro y Notificación de Facturas Negociadas con Factoring (CAVALI)
+                </strong>
+                <p className="leading-relaxed text-purple-800">
+                  Consulte la relación de facturas cuyos derechos de crédito han sido transferidos por sus proveedores a empresas de factoring autorizadas. Visualice la carta notarial de cesión en PDF y el código de anotación en cuenta para dirigir el pago de forma segura y liberatoria.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-[#E2E7EE] overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-[#E2E7EE] bg-[#F8FAFC] text-[#5B6B7F] uppercase tracking-wider font-semibold">
+                    <th className="py-3.5 px-4">Comprobante</th>
+                    <th className="py-3.5 px-4">Proveedor Cedente</th>
+                    <th className="py-3.5 px-4">Empresa de Factoring (Cesionario)</th>
+                    <th className="py-3.5 px-4">Monto Cedido</th>
+                    <th className="py-3.5 px-4">Código Anotación CAVALI</th>
+                    <th className="py-3.5 px-4">Estado Cesión</th>
+                    <th className="py-3.5 px-4 text-right">Carta de Cesión</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E2E7EE] text-[#0B2545]">
+                  {loadingFactoring ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-[#5B6B7F]">
+                        Cargando facturas en factoring...
+                      </td>
+                    </tr>
+                  ) : factoringOps.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-[#5B6B7F]">
+                        No se registran facturas negociadas con empresas de factoring para esta empresa.
+                      </td>
+                    </tr>
+                  ) : (
+                    factoringOps.map((op) => (
+                      <tr key={op.id} className="hover:bg-[#F8FAFC] transition-colors">
+                        <td className="py-4 px-4 font-bold text-[#0B2545] font-mono">
+                          {op.series ? `${op.series}-${op.number}` : 'F001-0004521'}
+                          <div className="text-[10px] text-[#5B6B7F] font-normal">
+                            Vcto: {op.due_date ? op.due_date.slice(0, 10) : '2026-12-15'}
+                          </div>
+                        </td>
+
+                        <td className="py-4 px-4">
+                          <span className="font-semibold text-[#0B2545] block">
+                            {op.supplier_name || 'DISTRIBUIDORA DE ALIMENTOS DEL SUR S.A.C.'}
+                          </span>
+                          <span className="text-[10px] font-mono text-[#5B6B7F]">RUC: 20601234567</span>
+                        </td>
+
+                        <td className="py-4 px-4">
+                          <span className="font-semibold text-purple-900 block flex items-center gap-1.5">
+                            <Landmark className="w-3.5 h-3.5 text-purple-600" />
+                            {op.financier_name || 'Infinanza Factoring S.A.C.'}
+                          </span>
+                          <span className="text-[10px] text-[#5B6B7F]">
+                            Tasa: {op.discount_rate_pct}% mes
+                          </span>
+                        </td>
+
+                        <td className="py-4 px-4 font-bold text-[#0B2545]">
+                          {op.currency || 'PEN'} {op.requested_amount?.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                        </td>
+
+                        <td className="py-4 px-4 font-mono text-[11px] text-[#0A7469] font-bold">
+                          {op.cavali_annotation_code || 'CAVALI-ANOT-PENDIENTE'}
+                        </td>
+
+                        <td className="py-4 px-4">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              op.status === 'DISBURSED'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : op.status === 'CAVALI_REGISTERED'
+                                ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                            }`}
+                          >
+                            {op.status === 'DISBURSED'
+                              ? 'Desembolsado'
+                              : op.status === 'CAVALI_REGISTERED'
+                              ? 'Anotado CAVALI'
+                              : 'En Trámite'}
+                          </span>
+                        </td>
+
+                        <td className="py-4 px-4 text-right">
+                          <button
+                            onClick={() => {
+                              setSelectedFactoringDoc(op);
+                              setDocModalTab('pdf');
+                              setPdfZoom(100);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0B2545] hover:bg-[#07192F] text-white text-xs font-semibold transition-colors shadow-sm"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Ver Documento PDF</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
