@@ -214,6 +214,26 @@ export interface PurchaseOrder {
   erp_reference?: string;
 }
 
+export interface SupplierPurchaseOrder {
+  po_id: string;
+  po_number: string;
+  order_type: 'BIEN' | 'SERVICIO';
+  supplier_ruc: string;
+  supplier_name: string;
+  issue_date: string;
+  currency: string;
+  subtotal: number;
+  tax_amount: number;
+  total_amount: number;
+  status: string;
+  has_reception: boolean;
+  reception_type: 'GR_MIGO' | 'HES' | 'NONE';
+  reception_doc: string;
+  reception_date: string;
+  can_upload_invoice: boolean;
+  message: string;
+}
+
 export interface IngestSummary {
   processed_count: number;
   inserted_count: number;
@@ -375,6 +395,7 @@ export interface POReceptionStatusResponse {
   currency: string;
   total_amount: number;
   has_reception: boolean;
+  reception_type?: 'GR_MIGO' | 'HES' | 'NONE';
   can_upload_invoice: boolean;
   message: string;
   goods_receipts?: Array<{
@@ -801,6 +822,10 @@ export class FactumfluxClient {
 
   async listSupplierInvoices(): Promise<InvoiceSummary[]> {
     return this.fetch('/api/v1/supplier/invoices');
+  }
+
+  async listSupplierPurchaseOrders(): Promise<SupplierPurchaseOrder[]> {
+    return this.fetch('/api/v1/supplier/purchase-orders');
   }
 
   async checkPOReceptionStatus(poNumber: string): Promise<POReceptionStatusResponse> {

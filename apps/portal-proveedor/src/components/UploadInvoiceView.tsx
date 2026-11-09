@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   UploadCloud,
   Search,
@@ -13,10 +13,13 @@ import {
   FileUp,
   Check,
   Info,
+  RefreshCw,
+  Clock,
 } from 'lucide-react';
 import {
   FactumfluxClient,
   POReceptionStatusResponse,
+  SupplierPurchaseOrder,
 } from '@factumflux/api-client';
 import { SystemModal } from '@factumflux/ui';
 
@@ -33,7 +36,14 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
 }) => {
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
-  // Step 1: PO / OS Lookup
+  // Step 1: PO / OS List & Selection
+  const [orders, setOrders] = useState<SupplierPurchaseOrder[]>([]);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(true);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [orderFilter, setOrderFilter] = useState('');
+  const [showManualSearch, setShowManualSearch] = useState(false);
+
+  // Step 1 Manual Lookup
   const [poNumber, setPoNumber] = useState('OC-2026-8941');
   const [isCheckingPO, setIsCheckingPO] = useState(false);
   const [poStatus, setPoStatus] = useState<POReceptionStatusResponse | null>(null);
@@ -45,6 +55,90 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
     message: string;
     type?: 'warning' | 'danger' | 'info';
   } | null>(null);
+
+  // Fetch open orders for the current supplier
+  const fetchOrders = async () => {
+    setIsLoadingOrders(true);
+    setOrdersError(null);
+    try {
+      const data = await client.listSupplierPurchaseOrders();
+      setOrders(data || []);
+    } catch (err: any) {
+      setOrdersError(err.message || 'No se pudieron consultar las órdenes de compra/servicio.');
+    } finally {
+      setIsLoadingOrders(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const handleSelectOrder = (order: SupplierPurchaseOrder) => {
+    if (!order.can_upload_invoice) {
+      setSystemAlert({
+        type: 'warning',
+        title: 'Recepción Pendiente en ERP',
+        message:
+          order.order_type === 'BIEN'
+            ? `La orden ${order.po_number} no cuenta aún con Entrada de Mercancías (GR/MIGO) aprobada en el ERP del cliente. El área de almacén/logística debe registrar la recepción física de los bienes antes de que pueda emitir la factura.`
+            : `La orden ${order.po_number} no cuenta aún con Conformidad de Servicio (HES) aprobada en el ERP del cliente. El área usuaria debe dar conformidad al servicio antes de que pueda emitir la factura.`,
+      });
+      return;
+    }
+
+    setPoNumber(order.po_number);
+    setPoStatus({
+      po_number: order.po_number,
+      order_type: order.order_type,
+      has_reception: order.has_reception,
+      reception_type: order.reception_type,
+      can_upload_invoice: order.can_upload_invoice,
+      message: order.message,
+      total_amount: order.total_amount,
+      currency: order.currency,
+      goods_receipts:
+        order.reception_type === 'GR_MIGO' && order.reception_doc
+          ? [
+              {
+                id: '1',
+                gr_number: order.reception_doc,
+                movement_type: '101',
+                receipt_date: order.reception_date || order.issue_date,
+                total_received: order.total_amount,
+              },
+            ]
+          : [],
+      service_entry_sheets:
+        order.reception_type === 'HES' && order.reception_doc
+          ? [
+              {
+                id: '1',
+                sheet_number: order.reception_doc,
+                service_description: 'Conformidad aprobada en ERP',
+                accepted_amount: order.total_amount,
+                approved_at: order.reception_date || order.issue_date,
+                status: 'APPROVED',
+              },
+            ]
+          : [],
+    });
+
+    if (order.order_type === 'BIEN') {
+      setGreNumber('000' + Math.floor(1000 + Math.random() * 9000));
+    }
+    setStep(2);
+  };
+
+  const filteredOrders = orders.filter((o) => {
+    const q = orderFilter.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      o.po_number.toLowerCase().includes(q) ||
+      o.order_type.toLowerCase().includes(q) ||
+      (o.reception_doc && o.reception_doc.toLowerCase().includes(q))
+    );
+  });
 
   // Step 2: Invoice XML & PDF Upload
   const [xmlFile, setXmlFile] = useState<File | null>(null);
@@ -311,172 +405,269 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
         </div>
       </div>
 
-      {/* STEP 1: PO / OS ERP Gatekeeper */}
+      {/* STEP 1: PO / OS ERP Gatekeeper & Open Orders Table */}
       {step === 1 && (
         <div className="bg-white rounded-2xl p-6 border border-[#E2E7EE] shadow-sm space-y-6">
-          <div className="border-b border-[#E2E7EE] pb-4">
-            <h2 className="text-lg font-bold text-[#0B2545] flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-[#0A7469]" />
-              Paso 1: Validación Previa de Orden de Compra o Servicio (Gatekeeper ERP)
-            </h2>
-            <p className="text-xs text-[#5B6B7F] mt-1">
-              Para garantizar la conformidad, Factumflux valida en tiempo real que tu orden cuente con Entrada de Mercancías (GR/MIGO) o Conformidad de Servicio (HES) aprobada en el ERP.
-            </p>
-          </div>
-
-          {/* PO Input & Presets */}
-          <div className="space-y-3">
-            <label className="block text-xs font-semibold text-[#0B2545] uppercase tracking-wider">
-              Número de Orden de Compra (OC) u Orden de Servicio (OS)
-            </label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-[#5B6B7F] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={poNumber}
-                  onChange={(e) => setPoNumber(e.target.value.toUpperCase())}
-                  placeholder="Ej. OC-2026-8941 o OS-2026-102"
-                  className="w-full pl-10 pr-4 py-2.5 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-[#0B2545] font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#0A7469] uppercase"
-                />
-              </div>
+          <div className="border-b border-[#E2E7EE] pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-[#0B2545] flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-[#0A7469]" />
+                Paso 1: Seleccionar Orden de Compra o Servicio
+              </h2>
+              <p className="text-xs text-[#5B6B7F] mt-1">
+                Órdenes abiertas registradas para su RUC con validación en tiempo real de recepción en el ERP.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => handleCheckPO()}
-                disabled={isCheckingPO}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-semibold text-sm transition-all shadow-md shadow-[#0A7469]/20 disabled:opacity-50"
+                onClick={fetchOrders}
+                disabled={isLoadingOrders}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E2E7EE] hover:bg-[#F8FAFC] text-xs font-semibold text-[#5B6B7F] hover:text-[#0B2545] transition-colors"
+                title="Actualizar listado de órdenes"
               >
-                {isCheckingPO ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Consultando ERP...
-                  </>
-                ) : (
-                  <>
-                    <Search className="w-4 h-4" />
-                    Verificar en ERP
-                  </>
-                )}
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingOrders ? 'animate-spin' : ''}`} />
+                Actualizar
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowManualSearch(!showManualSearch)}
+                className="text-xs font-semibold text-[#0A7469] hover:underline px-2 py-1"
+              >
+                {showManualSearch ? 'Ocultar búsqueda manual' : 'Buscar por código'}
               </button>
             </div>
-
-            {/* Quick Demo Selector */}
-            <div className="flex items-center gap-2 pt-1 flex-wrap">
-              <span className="text-xs text-[#5B6B7F]">Órdenes de prueba:</span>
-              {demoPOs.map((demo) => (
-                <button
-                  key={demo.code}
-                  type="button"
-                  onClick={() => {
-                    setPoNumber(demo.code);
-                    handleCheckPO(demo.code);
-                  }}
-                  className="text-xs px-2.5 py-1 rounded-lg bg-[#F3F5F8] hover:bg-[#E2E7EE] text-[#0B2545] border border-[#E2E7EE] transition-colors font-mono"
-                  title={demo.desc}
-                >
-                  {demo.code}
-                </button>
-              ))}
-            </div>
           </div>
 
-          {/* Error Message */}
-          {poError && (
-            <div className="p-4 rounded-xl bg-[#FDECEA] border border-[#B42318]/30 text-[#B42318] text-sm flex items-start gap-3">
-              <XCircle className="w-5 h-5 flex-shrink-0 text-[#B42318] mt-0.5" />
-              <div>
-                <p className="font-semibold">No se pudo verificar la orden</p>
-                <p className="text-xs text-[#B42318]/90 mt-0.5">{poError}</p>
-              </div>
+          {/* Quick Filter Bar */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-[#5B6B7F] absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={orderFilter}
+              onChange={(e) => setOrderFilter(e.target.value)}
+              placeholder="Filtrar por número de orden (OC / OS) o tipo..."
+              className="w-full pl-10 pr-4 py-2.5 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-xs text-[#0B2545] placeholder-[#5B6B7F] focus:outline-none focus:ring-2 focus:ring-[#0A7469]"
+            />
+          </div>
+
+          {/* Orders Table */}
+          {isLoadingOrders ? (
+            <div className="py-12 flex flex-col items-center justify-center text-[#5B6B7F] gap-3">
+              <div className="w-8 h-8 border-3 border-[#0A7469]/20 border-t-[#0A7469] rounded-full animate-spin" />
+              <p className="text-xs">Consultando órdenes abiertas en el ERP...</p>
+            </div>
+          ) : ordersError ? (
+            <div className="p-4 rounded-xl bg-[#FDECEA] border border-[#B42318]/30 text-[#B42318] text-xs flex items-center justify-between">
+              <span>{ordersError}</span>
+              <button onClick={fetchOrders} className="font-semibold underline ml-2">
+                Reintentar
+              </button>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-[#E2E7EE]">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#F8FAFC] text-[#5B6B7F] uppercase tracking-wider font-semibold border-b border-[#E2E7EE]">
+                  <tr>
+                    <th className="py-3 px-4">Orden / Tipo</th>
+                    <th className="py-3 px-4">Fecha Emisión</th>
+                    <th className="py-3 px-4 text-right">Importe Total</th>
+                    <th className="py-3 px-4">Estado Recepción ERP</th>
+                    <th className="py-3 px-4 text-center">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E2E7EE] bg-white">
+                  {filteredOrders.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-[#5B6B7F]">
+                        No se encontraron órdenes de compra o servicio abiertas para su empresa.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredOrders.map((ord) => (
+                      <tr
+                        key={ord.po_id || ord.po_number}
+                        onClick={() => handleSelectOrder(ord)}
+                        className={`transition-colors cursor-pointer ${
+                          ord.can_upload_invoice
+                            ? 'hover:bg-[#E8F4F2]/50'
+                            : 'hover:bg-[#FFF9F5] opacity-90'
+                        }`}
+                      >
+                        <td className="py-3.5 px-4">
+                          <div className="font-mono font-bold text-[#0B2545] text-sm">
+                            {ord.po_number}
+                          </div>
+                          <span
+                            className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase mt-0.5 ${
+                              ord.order_type === 'BIEN'
+                                ? 'bg-[#E8F4F2] text-[#0A7469]'
+                                : 'bg-[#EFF8FF] text-[#175CD3]'
+                            }`}
+                          >
+                            {ord.order_type}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-[#5B6B7F]">
+                          {ord.issue_date || '-'}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-semibold text-[#0B2545]">
+                          {ord.currency === 'PEN' ? 'S/' : '$'}{' '}
+                          {Number(ord.total_amount).toLocaleString('es-PE', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          {ord.has_reception ? (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#E7F5EC] text-[#176B3F] border border-[#176B3F]/20 w-fit">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                {ord.reception_type === 'GR_MIGO'
+                                  ? 'Entrada Registrada (GR)'
+                                  : 'Conformidad Aprobada (HES)'}
+                              </span>
+                              {ord.reception_doc && (
+                                <span className="text-[11px] font-mono text-[#5B6B7F]">
+                                  Doc: {ord.reception_doc}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#FFFAEB] text-[#B54708] border border-[#B54708]/20 w-fit">
+                              <Clock className="w-3.5 h-3.5" />
+                              {ord.order_type === 'BIEN'
+                                ? 'Sin Entrada de Mercancías'
+                                : 'Sin Conformidad de Servicio'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          {ord.can_upload_invoice ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectOrder(ord);
+                              }}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#0A7469] hover:bg-[#075A52] text-white font-semibold text-xs transition-all shadow-sm shadow-[#0A7469]/20"
+                            >
+                              Cargar Factura
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <span
+                              className="text-[11px] text-[#B54708] font-medium"
+                              title="Requiere que el cliente registre la recepción o conformidad antes de facturar"
+                            >
+                              Pendiente ERP
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           )}
 
-          {/* ERP Reception Status Result Card */}
-          {poStatus && (
-            <div
-              className={`p-5 rounded-2xl border transition-all ${
-                poStatus.can_upload_invoice
-                  ? 'bg-[#E7F5EC] border-[#176B3F]/30 text-[#176B3F]'
-                  : 'bg-[#FDECEA] border-[#B42318]/30 text-[#B42318]'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  {poStatus.can_upload_invoice ? (
-                    <div className="p-2 rounded-xl bg-[#176B3F]/10 text-[#176B3F]">
-                      <CheckCircle2 className="w-6 h-6" />
-                    </div>
+          {/* Collapsible Manual Search Section */}
+          {showManualSearch && (
+            <div className="pt-4 border-t border-[#E2E7EE] space-y-4">
+              <h3 className="text-xs font-bold text-[#0B2545] uppercase tracking-wider">
+                Búsqueda Manual de Orden en ERP
+              </h3>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-[#5B6B7F] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={poNumber}
+                    onChange={(e) => setPoNumber(e.target.value.toUpperCase())}
+                    placeholder="Ej. OC-2026-8941 o OS-2026-102"
+                    className="w-full pl-10 pr-4 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-[#0B2545] font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#0A7469] uppercase"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCheckPO()}
+                  disabled={isCheckingPO}
+                  className="flex items-center gap-2 px-5 py-2 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-semibold text-xs transition-all shadow-md shadow-[#0A7469]/20 disabled:opacity-50"
+                >
+                  {isCheckingPO ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Consultando ERP...
+                    </>
                   ) : (
-                    <div className="p-2 rounded-xl bg-[#B42318]/10 text-[#B42318]">
-                      <XCircle className="w-6 h-6" />
-                    </div>
+                    <>
+                      <Search className="w-3.5 h-3.5" />
+                      Verificar en ERP
+                    </>
                   )}
-                  <div>
-                    <h3 className="font-bold text-[#0B2545] text-base">
-                      {poStatus.can_upload_invoice
-                        ? '✅ Conformidad ERP Aprobada'
-                        : '⛔ Bloqueo Preventivo: Falta Recepción en ERP'}
-                    </h3>
-                    <p className="text-xs mt-1 text-[#5B6B7F]">
-                      {poStatus.message}
-                    </p>
+                </button>
+              </div>
 
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                      <span className="px-2.5 py-1 rounded-lg bg-white text-[#0B2545] border border-[#E2E7EE] font-mono">
-                        Orden: <strong>{poStatus.po_number}</strong>
-                      </span>
-                      <span className="px-2.5 py-1 rounded-lg bg-white text-[#0A7469] border border-[#E2E7EE] font-semibold">
-                        Tipo: {poStatus.order_type}
-                      </span>
-                      <span className="px-2.5 py-1 rounded-lg bg-white text-[#0B2545] border border-[#E2E7EE] font-semibold">
-                        Monto OC:{' '}
-                        {poStatus.currency === 'PEN' ? 'S/' : '$'}{' '}
-                        {poStatus.total_amount?.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                      </span>
+              {/* Quick Demo Selector */}
+              <div className="flex items-center gap-2 pt-1 flex-wrap">
+                <span className="text-xs text-[#5B6B7F]">Órdenes de prueba:</span>
+                {demoPOs.map((demo) => (
+                  <button
+                    key={demo.code}
+                    type="button"
+                    onClick={() => {
+                      setPoNumber(demo.code);
+                      handleCheckPO(demo.code);
+                    }}
+                    className="text-xs px-2.5 py-1 rounded-lg bg-[#F3F5F8] hover:bg-[#E2E7EE] text-[#0B2545] border border-[#E2E7EE] transition-colors font-mono"
+                    title={demo.desc}
+                  >
+                    {demo.code}
+                  </button>
+                ))}
+              </div>
+
+              {/* Error Message */}
+              {poError && (
+                <div className="p-3 rounded-xl bg-[#FDECEA] border border-[#B42318]/30 text-[#B42318] text-xs flex items-start gap-2">
+                  <XCircle className="w-4 h-4 flex-shrink-0 text-[#B42318] mt-0.5" />
+                  <span>{poError}</span>
+                </div>
+              )}
+
+              {/* Manual PO Status Result */}
+              {poStatus && (
+                <div
+                  className={`p-4 rounded-xl border ${
+                    poStatus.can_upload_invoice
+                      ? 'bg-[#E7F5EC] border-[#176B3F]/30 text-[#176B3F]'
+                      : 'bg-[#FDECEA] border-[#B42318]/30 text-[#B42318]'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="font-bold text-[#0B2545] text-sm">
+                        {poStatus.can_upload_invoice
+                          ? '✅ Conformidad ERP Aprobada'
+                          : '⛔ Falta Recepción en ERP'}
+                      </h4>
+                      <p className="text-xs text-[#5B6B7F] mt-0.5">{poStatus.message}</p>
                     </div>
+                    {poStatus.can_upload_invoice && (
+                      <button
+                        type="button"
+                        onClick={() => setStep(2)}
+                        className="px-4 py-2 rounded-xl bg-[#0A7469] text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm"
+                      >
+                        Continuar <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
-              </div>
-
-              {/* Goods Receipts or Service Entry Sheets details */}
-              {poStatus.goods_receipts && poStatus.goods_receipts.length > 0 && (
-                <div className="mt-4 pt-3 border-t border-[#176B3F]/20 text-xs space-y-1">
-                  <span className="font-semibold text-[#176B3F]">Entrada de Mercancías registradas (MIGO):</span>
-                  {poStatus.goods_receipts.map((gr) => (
-                    <div key={gr.id} className="flex justify-between items-center text-[#0B2545] pl-2">
-                      <span>• Guía/Recepción: <strong>{gr.gr_number}</strong> ({gr.receipt_date})</span>
-                      <span>Monto recibido: S/ {gr.total_received.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {poStatus.service_entry_sheets && poStatus.service_entry_sheets.length > 0 && (
-                <div className="mt-4 pt-3 border-t border-[#176B3F]/20 text-xs space-y-1">
-                  <span className="font-semibold text-[#176B3F]">Hojas de Entrada de Servicios aprobadas (HES):</span>
-                  {poStatus.service_entry_sheets.map((hes) => (
-                    <div key={hes.id} className="flex justify-between items-center text-[#0B2545] pl-2">
-                      <span>• HES: <strong>{hes.sheet_number}</strong> ({hes.service_description})</span>
-                      <span>Monto aceptado: S/ {hes.accepted_amount.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                  ))}
-                </div>
               )}
             </div>
           )}
-
-          {/* Action Footer for Step 1 */}
-          <div className="pt-4 flex justify-end">
-            <button
-              type="button"
-              disabled={!poStatus || !poStatus.can_upload_invoice}
-              onClick={() => setStep(2)}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-bold text-sm shadow-md shadow-[#0A7469]/20 transition-all hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
-            >
-              <span>Habilitar Carga de Comprobante</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
         </div>
       )}
 
