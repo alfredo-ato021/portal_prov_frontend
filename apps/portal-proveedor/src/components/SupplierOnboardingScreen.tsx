@@ -176,15 +176,19 @@ export const SupplierOnboardingScreen: React.FC<SupplierOnboardingScreenProps> =
 
           {/* Estado de Cuenta Existente */}
           {alreadyRegistered && (
-            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 mb-6 flex items-center justify-between">
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 mb-6 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>Este RUC ya cuenta con un usuario registrado.</span>
+                <span>
+                  Este RUC ya cuenta con un usuario registrado. Puede{' '}
+                  <strong className="text-amber-950">Iniciar Sesión</strong> o ingresar sus datos abajo para{' '}
+                  <strong className="text-amber-950">actualizar su contraseña</strong>.
+                </span>
               </div>
               <button
                 type="button"
                 onClick={onSwitchToLogin}
-                className="font-bold text-[#0A7469] hover:underline shrink-0"
+                className="font-bold text-[#0A7469] hover:underline shrink-0 px-2 py-1 bg-white rounded border border-[#0A7469]/20"
               >
                 Iniciar Sesión &rarr;
               </button>

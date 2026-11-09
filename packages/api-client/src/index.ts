@@ -733,7 +733,7 @@ export class FactumfluxClient {
     });
   }
 
-  async supplierLogin(ruc: string, email: string, password: string): Promise<{
+  async supplierLogin(ruc: string, email: string, password: string, tenantId?: string): Promise<{
     success: boolean;
     token: string;
     tenant_id: string;
@@ -745,7 +745,12 @@ export class FactumfluxClient {
   }> {
     return this.fetch('/api/v1/auth/supplier-login', {
       method: 'POST',
-      body: JSON.stringify({ ruc, email, password }),
+      body: JSON.stringify({
+        ruc,
+        email,
+        password,
+        tenant_id: tenantId || this.tenantId,
+      }),
     });
   }
 
