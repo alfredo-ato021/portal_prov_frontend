@@ -578,6 +578,7 @@ export class FactumfluxClient {
   private baseUrl: string;
   private tenantId?: string;
   private token?: string;
+  private supplierRuc?: string;
 
   constructor(config: ApiClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
@@ -591,6 +592,10 @@ export class FactumfluxClient {
 
   setToken(token: string) {
     this.token = token;
+  }
+
+  setSupplierRuc(supplierRuc: string) {
+    this.supplierRuc = supplierRuc;
   }
 
   private async fetch<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -609,6 +614,10 @@ export class FactumfluxClient {
 
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
+    }
+
+    if (this.supplierRuc) {
+      headers['X-Supplier-RUC'] = this.supplierRuc;
     }
 
     const response = await fetch(url, { ...options, headers });
@@ -926,15 +935,18 @@ export class FactumfluxClient {
 
   // Supplier Portal endpoints
   async getSupplierDashboard(): Promise<SupplierDashboardStats> {
-    return this.fetch('/api/v1/supplier/dashboard');
+    const query = this.supplierRuc ? `?supplier_ruc=${encodeURIComponent(this.supplierRuc)}` : '';
+    return this.fetch(`/api/v1/supplier/dashboard${query}`);
   }
 
   async listSupplierInvoices(): Promise<InvoiceSummary[]> {
-    return this.fetch('/api/v1/supplier/invoices');
+    const query = this.supplierRuc ? `?supplier_ruc=${encodeURIComponent(this.supplierRuc)}` : '';
+    return this.fetch(`/api/v1/supplier/invoices${query}`);
   }
 
   async listSupplierPurchaseOrders(): Promise<SupplierPurchaseOrder[]> {
-    return this.fetch('/api/v1/supplier/purchase-orders');
+    const query = this.supplierRuc ? `?supplier_ruc=${encodeURIComponent(this.supplierRuc)}` : '';
+    return this.fetch(`/api/v1/supplier/purchase-orders${query}`);
   }
 
   async checkPOReceptionStatus(poNumber: string): Promise<POReceptionStatusResponse> {

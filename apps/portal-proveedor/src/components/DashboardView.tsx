@@ -31,18 +31,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       .then((data) => {
         if (isMounted) setStats(data);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('Error cargando métricas de dashboard:', err);
         if (isMounted) {
           setStats({
-            total_invoices_count: 8,
-            total_amount_billed: 184500.0,
+            total_invoices_count: 0,
+            total_amount_billed: 0,
             currency: 'PEN',
-            invoices_enviado: 1,
-            invoices_en_revision: 2,
-            invoices_procesada: 5,
-            pending_payment_amount: 48950.0,
-            paid_amount: 135550.0,
-            next_payment_scheduled_date: '2026-11-15',
+            invoices_enviado: 0,
+            invoices_en_revision: 0,
+            invoices_procesada: 0,
+            pending_payment_amount: 0,
+            paid_amount: 0,
+            next_payment_scheduled_date: undefined,
           });
         }
       })

@@ -31,71 +31,10 @@ export const InvoicesListView: React.FC<InvoicesListViewProps> = ({ client, onNa
     setLoading(true);
     try {
       const data = await client.listSupplierInvoices();
-      setInvoices(data);
-    } catch {
-      // Fallback demo data
-      setInvoices([
-        {
-          id: 'inv-1',
-          series: 'F001',
-          number: '0004521',
-          document_type: '01',
-          issue_date: '2026-11-01',
-          due_date: '2026-12-01',
-          currency: 'PEN',
-          total_amount: 14250.0,
-          state: 'match',
-          processing_status: 'Procesada/Contabilizada',
-          sunat_status: 'accepted',
-          order_type: 'BIEN',
-          po_number: 'OC-2026-8941',
-          has_gre: true,
-          gre_series: 'T001',
-          gre_number: '00004521',
-          payment_status: 'Pendiente',
-          payment_scheduled_date: '2026-11-15',
-        },
-        {
-          id: 'inv-2',
-          series: 'F001',
-          number: '0004520',
-          document_type: '01',
-          issue_date: '2026-10-25',
-          due_date: '2026-11-25',
-          currency: 'PEN',
-          total_amount: 8900.0,
-          state: 'validado_sunat',
-          processing_status: 'En revisión',
-          sunat_status: 'accepted',
-          order_type: 'SERVICIO',
-          po_number: 'OS-2026-102',
-          has_gre: false,
-          payment_status: 'Pendiente',
-          payment_scheduled_date: '2026-11-20',
-        },
-        {
-          id: 'inv-3',
-          series: 'F001',
-          number: '0004515',
-          document_type: '01',
-          issue_date: '2026-10-10',
-          due_date: '2026-11-10',
-          currency: 'PEN',
-          total_amount: 32000.0,
-          state: 'pagado',
-          processing_status: 'Procesada/Contabilizada',
-          sunat_status: 'accepted',
-          order_type: 'BIEN',
-          po_number: 'OC-2026-8710',
-          has_gre: true,
-          gre_series: 'T001',
-          gre_number: '00004515',
-          is_factored: true,
-          factoring_entity_name: 'InnovaFactoring S.A.',
-          payment_status: 'Pagado',
-          paid_at: '2026-10-28',
-        },
-      ]);
+      setInvoices(data || []);
+    } catch (err) {
+      console.error('Error cargando facturas de proveedor:', err);
+      setInvoices([]);
     } finally {
       setLoading(false);
     }

@@ -45,6 +45,9 @@ const client = new FactumfluxClient({
   tenantId: initialInfo.tenantId || paramTenant,
   token: initialInfo.token,
 });
+if (initialInfo.ruc || paramRuc) {
+  client.setSupplierRuc(initialInfo.ruc || paramRuc);
+}
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -67,6 +70,9 @@ export default function App() {
     if (supplierInfo.token) {
       client.setToken(supplierInfo.token);
     }
+    if (supplierInfo.ruc) {
+      client.setSupplierRuc(supplierInfo.ruc);
+    }
   }, [supplierInfo]);
 
   const handleLogin = (credentials: {
@@ -85,6 +91,9 @@ export default function App() {
     if (credentials.token) {
       client.setToken(credentials.token);
     }
+    if (credentials.ruc) {
+      client.setSupplierRuc(credentials.ruc);
+    }
     setSupplierInfo((prev: any) => ({
       ...prev,
       ...credentials,
@@ -99,6 +108,7 @@ export default function App() {
     localStorage.removeItem('factumflux_supplier_info');
     client.setTenantId('');
     client.setToken('');
+    client.setSupplierRuc('');
     setIsAuthenticated(false);
   };
 
