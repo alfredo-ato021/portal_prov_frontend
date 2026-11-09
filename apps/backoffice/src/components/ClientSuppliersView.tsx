@@ -428,16 +428,25 @@ export const ClientSuppliersView: React.FC<ClientSuppliersViewProps> = ({
                       </span>
                       <div className="flex items-center gap-1.5">
                         <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                          {sunatInfo.status}
+                          {sunatInfo.status || 'ACTIVO'}
                         </span>
                         <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                          {sunatInfo.condition}
+                          {sunatInfo.condition || 'HABIDO'}
                         </span>
                       </div>
                     </div>
-                    <p className="font-semibold text-[#0B2545] text-xs pt-0.5">{sunatInfo.legal_name}</p>
+                    {sunatInfo.legal_name ? (
+                      <p className="font-semibold text-[#0B2545] text-xs pt-0.5">{sunatInfo.legal_name}</p>
+                    ) : (
+                      <p className="text-amber-800 text-[11px] font-medium pt-0.5">
+                        RUC con formato oficial válido. Ingrese la Razón Social si no se autocompletó.
+                      </p>
+                    )}
                     {sunatInfo.fiscal_address && (
                       <p className="text-[#5B6B7F] text-[10px]">📍 Dirección Fiscal: {sunatInfo.fiscal_address}</p>
+                    )}
+                    {sunatInfo.source && (
+                      <p className="text-[#0A7469] text-[9px] font-mono">Fuente: {sunatInfo.source}</p>
                     )}
                   </div>
                 )}
