@@ -22,6 +22,7 @@ interface InvoicesListViewProps {
 export const InvoicesListView: React.FC<InvoicesListViewProps> = ({ client, onNavigateToUpload }) => {
   const [invoices, setInvoices] = useState<InvoiceSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [paymentFilter, setPaymentFilter] = useState<string>('ALL');
@@ -29,11 +30,13 @@ export const InvoicesListView: React.FC<InvoicesListViewProps> = ({ client, onNa
 
   const loadInvoices = async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await client.listSupplierInvoices();
       setInvoices(data || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error cargando facturas de proveedor:', err);
+      setError(err.message || 'Error de conexión al consultar comprobantes');
       setInvoices([]);
     } finally {
       setLoading(false);
@@ -155,6 +158,25 @@ export const InvoicesListView: React.FC<InvoicesListViewProps> = ({ client, onNa
           </button>
         </div>
       </div>
+
+      {error && (
+        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-rose-600 flex-shrink-0" />
+            <div>
+              <p className="font-semibold text-xs">Error al cargar comprobantes</p>
+              <p className="text-xs text-rose-700">{error}</p>
+            </div>
+          </div>
+          <button
+            onClick={loadInvoices}
+            className="px-3 py-1.5 bg-white border border-rose-300 rounded-xl text-xs font-bold text-rose-800 hover:bg-rose-100 flex items-center gap-1.5"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Reintentar
+          </button>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="bg-white rounded-2xl p-4 border border-[#E2E7EE] shadow-sm flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">

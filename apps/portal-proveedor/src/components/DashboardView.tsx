@@ -7,6 +7,8 @@ import {
   UploadCloud,
   FileText,
   Building,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { FactumfluxClient, SupplierDashboardStats } from '@factumflux/api-client';
 
@@ -23,37 +25,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const [stats, setStats] = useState<SupplierDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
+  const fetchDashboard = () => {
+    setLoading(true);
+    setError(null);
     client
       .getSupplierDashboard()
       .then((data) => {
-        if (isMounted) setStats(data);
+        setStats(data);
       })
-      .catch((err) => {
+      .catch((err: any) => {
         console.error('Error cargando métricas de dashboard:', err);
-        if (isMounted) {
-          setStats({
-            total_invoices_count: 0,
-            total_amount_billed: 0,
-            currency: 'PEN',
-            invoices_enviado: 0,
-            invoices_en_revision: 0,
-            invoices_procesada: 0,
-            pending_payment_amount: 0,
-            paid_amount: 0,
-            next_payment_scheduled_date: undefined,
-          });
-        }
+        setError(err.message || 'Error de conexión al cargar métricas');
       })
       .finally(() => {
-        if (isMounted) setLoading(false);
+        setLoading(false);
       });
+  };
 
-    return () => {
-      isMounted = false;
-    };
+  useEffect(() => {
+    fetchDashboard();
   }, [client]);
 
   const formatMoney = (amount?: number, curr = 'PEN') => {
@@ -109,6 +101,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       </div>
+
+      {error && (
+        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-rose-600 flex-shrink-0" />
+            <div>
+              <p className="font-semibold text-xs">Error al sincronizar métricas</p>
+              <p className="text-xs text-rose-700">{error}</p>
+            </div>
+          </div>
+          <button
+            onClick={fetchDashboard}
+            className="px-3 py-1.5 bg-white border border-rose-300 rounded-xl text-xs font-bold text-rose-800 hover:bg-rose-100 flex items-center gap-1.5"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Reintentar
+          </button>
+        </div>
+      )}
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
