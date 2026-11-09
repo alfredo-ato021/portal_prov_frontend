@@ -91,7 +91,7 @@ export default function App() {
 
   // CSV Ingestion modal state
   const [isIngestingCSV, setIsIngestingCSV] = useState(false);
-  const [csvType, setCsvType] = useState<'po' | 'gr' | 'ses'>('po');
+  const [csvType, setCsvType] = useState<'auto' | 'po' | 'gr' | 'ses'>('auto');
   const [isUploadingCSV, setIsUploadingCSV] = useState(false);
   const csvFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -266,15 +266,26 @@ export default function App() {
     setIsUploadingCSV(true);
     setActionMessage(null);
     try {
-      let res;
-      if (csvType === 'po') {
+      let res: any;
+      if (csvType === 'auto') {
+        res = await client.uploadAutoERP(file);
+      } else if (csvType === 'po') {
         res = await client.uploadPurchaseOrdersCSV(file);
       } else if (csvType === 'gr') {
         res = await client.uploadGoodsReceiptsCSV(file);
       } else {
         res = await client.uploadServiceEntrySheetsCSV(file);
       }
-      setActionMessage(`Ingesta masiva exitosa: ${res.inserted_count} registros procesados.`);
+
+      const typeLabel = res.file_type === 'gr' 
+        ? 'Entradas MIGO' 
+        : res.file_type === 'ses' 
+        ? 'Conformidades HES' 
+        : res.file_type === 'po'
+        ? 'Órdenes de Compra'
+        : 'ERP';
+
+      setActionMessage(`Ingesta masiva exitosa: ${res.inserted_count} registros procesados (${typeLabel}).`);
       setIsIngestingCSV(false);
       await loadInvoicesAndOrders();
     } catch (err: any) {
@@ -861,8 +872,9 @@ export default function App() {
               <select
                 value={csvType}
                 onChange={(e) => setCsvType(e.target.value as any)}
-                className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545]"
+                className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545] font-medium"
               >
+                <option value="auto">⚡ Detección Automática (Órdenes, MIGO o HES)</option>
                 <option value="po">Órdenes de Compra (.xlsx / .csv)</option>
                 <option value="gr">Entrada de Mercancías MIGO (.xlsx / .csv)</option>
                 <option value="ses">Hojas de Entrada de Servicios HES (.xlsx / .csv)</option>
@@ -872,7 +884,7 @@ export default function App() {
                 <span>¿Requiere la plantilla oficial?</span>
                 <button
                   type="button"
-                  onClick={() => downloadTemplate(csvType)}
+                  onClick={() => downloadTemplate(csvType === 'auto' ? 'po' : csvType)}
                   className="font-bold underline hover:text-[#075A52] flex items-center gap-1"
                 >
                   <Download className="w-3 h-3" />

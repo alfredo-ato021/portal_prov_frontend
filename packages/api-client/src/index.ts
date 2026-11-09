@@ -893,6 +893,17 @@ export class FactumfluxClient {
     });
   }
 
+  async uploadAutoERP(file: File): Promise<IngestSummary & { file_type?: string }> {
+    const formData = new FormData();
+    formData.append('csv_file', file);
+    formData.append('file', file);
+    formData.append('excel_file', file);
+    return this.fetch('/api/v1/backoffice/erp/upload-auto', {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
   async listNegotiableAlerts(): Promise<NegotiableAlertItem[]> {
     return this.fetch('/api/v1/backoffice/invoices/negotiable-alerts');
   }
