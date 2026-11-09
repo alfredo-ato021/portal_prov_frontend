@@ -8,6 +8,10 @@ import {
   Globe,
   Copy,
   Zap,
+  CreditCard,
+  Eye,
+  EyeOff,
+  CalendarCheck,
 } from 'lucide-react';
 import { FactumfluxClient, TenantIntegrationsSettings } from '@factumflux/api-client';
 import { SystemModal } from '@factumflux/ui';
@@ -40,6 +44,8 @@ export const ClientIntegrationsView: React.FC<ClientIntegrationsViewProps> = ({
     sire_client_secret: '••••••••••••••••',
     sire_auto_sync_enabled: true,
     inbound_api_key: `ff_live_key_${tenantId.slice(0, 8)}`,
+    allow_supplier_payment_view: true,
+    erp_sync_payments_enabled: true,
   });
 
   const [loading, setLoading] = useState(true);
@@ -461,6 +467,121 @@ export const ClientIntegrationsView: React.FC<ClientIntegrationsViewProps> = ({
                   <span>Copiar</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION 4: PROGRAMACIÓN DE PAGOS & PERMISOS DE VISUALIZACIÓN PROVEEDORES */}
+        <div className="bg-white rounded-2xl p-6 border border-[#E2E7EE] shadow-sm space-y-5">
+          <div className="flex items-center justify-between border-b border-[#E2E7EE] pb-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-amber-50 text-amber-700">
+                <CreditCard className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="font-bold text-[#0B2545] text-base">
+                  4. Portal del Proveedor: Permisos de Visualización & Programación de Pagos
+                </h2>
+                <p className="text-xs text-[#5B6B7F]">
+                  Controle si los proveedores pueden consultar la fecha estimada de abono de sus comprobantes y sincronice tesorería con su ERP.
+                </p>
+              </div>
+            </div>
+
+            <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+              config.allow_supplier_payment_view
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                : 'bg-amber-50 text-amber-800 border-amber-200'
+            }`}>
+              {config.allow_supplier_payment_view ? 'Visibilidad Activada' : 'Fechas Ocultas'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Toggle 1: Allow Supplier Payment View */}
+            <div className="p-4 rounded-xl border border-[#E2E7EE] bg-[#F8FAFC] flex items-start gap-3">
+              <input
+                type="checkbox"
+                id="allow_supplier_payment_view"
+                checked={config.allow_supplier_payment_view ?? true}
+                onChange={(e) =>
+                  setConfig({ ...config, allow_supplier_payment_view: e.target.checked })
+                }
+                className="mt-1 rounded text-[#0A7469] focus:ring-[#0A7469] w-4 h-4 cursor-pointer"
+              />
+              <label htmlFor="allow_supplier_payment_view" className="cursor-pointer">
+                <span className="font-semibold text-xs text-[#0B2545] flex items-center gap-1.5">
+                  {config.allow_supplier_payment_view ? (
+                    <Eye className="w-4 h-4 text-emerald-600" />
+                  ) : (
+                    <EyeOff className="w-4 h-4 text-amber-600" />
+                  )}
+                  Habilitar visualización de la programación de pagos para proveedores
+                </span>
+                <p className="text-[11px] text-[#5B6B7F] mt-1 leading-relaxed">
+                  Permite que los proveedores visualicen en su portal la fecha estimada de abono y el estado de la programación. Si se desactiva, las facturas aprobadas solo mostrarán &quot;Pendiente&quot; y la fecha programada se mantendrá como información privada de tesorería.
+                </p>
+              </label>
+            </div>
+
+            {/* Toggle 2: ERP Sync Payments */}
+            <div className="p-4 rounded-xl border border-[#E2E7EE] bg-[#F8FAFC] flex items-start gap-3">
+              <input
+                type="checkbox"
+                id="erp_sync_payments_enabled"
+                checked={config.erp_sync_payments_enabled ?? true}
+                onChange={(e) =>
+                  setConfig({ ...config, erp_sync_payments_enabled: e.target.checked })
+                }
+                className="mt-1 rounded text-[#0A7469] focus:ring-[#0A7469] w-4 h-4 cursor-pointer"
+              />
+              <label htmlFor="erp_sync_payments_enabled" className="cursor-pointer">
+                <span className="font-semibold text-xs text-[#0B2545] flex items-center gap-1.5">
+                  <CalendarCheck className="w-4 h-4 text-[#0A7469]" />
+                  Sincronizar automáticamente propuestas de pago y abonos desde el ERP
+                </span>
+                <p className="text-[11px] text-[#5B6B7F] mt-1 leading-relaxed">
+                  Permite recibir periódicamente la fecha de pago programada (F110 de SAP / propuestas de tesorería) y la fecha de desembolso ejecutado directamente mediante el conector ERP o vía API REST Inbound.
+                </p>
+              </label>
+            </div>
+          </div>
+
+          {/* Inbound API Payment Schedule Integration Info */}
+          <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-200/80 text-xs text-blue-900 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-blue-700" />
+                API REST Inbound de Tesorería para Programación de Pagos
+              </span>
+              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-800">
+                PUT /api/v1/backoffice/invoices/{'{invoice_id}'}/payment-schedule
+              </span>
+            </div>
+            <p className="text-[11px] text-blue-800">
+              Su sistema contable o script de tesorería puede enviar el JSON de programación autenticando con la cabecera <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-[10px]">X-Tenant-ID: {tenantId}</code>:
+            </p>
+            <div className="flex items-center gap-2">
+              <pre className="w-full p-2.5 bg-white border border-blue-200 rounded-lg font-mono text-[11px] text-[#0B2545] overflow-x-auto">
+{`{
+  "payment_scheduled_date": "2026-11-20",
+  "payment_status": "SCHEDULED",
+  "paid_amount": 14250.00
+}`}
+              </pre>
+              <button
+                type="button"
+                onClick={() =>
+                  copyToClipboard(
+                    `${window.location.origin}/api/v1/backoffice/invoices/{id}/payment-schedule`,
+                    'Endpoint de Programación de Pagos'
+                  )
+                }
+                className="px-3 py-2 rounded-xl bg-white hover:bg-blue-100 text-blue-900 border border-blue-200 font-semibold flex items-center gap-1.5 transition-colors self-center shrink-0"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>Copiar Endpoint</span>
+              </button>
             </div>
           </div>
         </div>

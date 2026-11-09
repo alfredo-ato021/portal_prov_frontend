@@ -347,6 +347,8 @@ export interface TenantIntegrationsSettings {
   sire_client_secret?: string;
   sire_auto_sync_enabled: boolean;
   inbound_api_key?: string;
+  allow_supplier_payment_view?: boolean;
+  erp_sync_payments_enabled?: boolean;
   last_synced_at?: string;
 }
 
@@ -845,6 +847,16 @@ export class FactumfluxClient {
     return this.fetch('/api/v1/backoffice/integrations/test', {
       method: 'POST',
       body: JSON.stringify(data || {}),
+    });
+  }
+
+  async scheduleInvoicePayment(
+    invoiceId: string,
+    data: { payment_scheduled_date: string; payment_status?: string; paid_amount?: number }
+  ): Promise<{ success: boolean; message: string; invoice_id: string; payment_scheduled_date: string }> {
+    return this.fetch(`/api/v1/backoffice/invoices/${invoiceId}/payment-schedule`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
     });
   }
 }

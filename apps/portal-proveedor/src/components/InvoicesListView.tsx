@@ -170,10 +170,14 @@ export const InvoicesListView: React.FC<InvoicesListViewProps> = ({ client, onNa
           <Clock className="w-3 h-3" />
           Pendiente
         </span>
-        {scheduledDate && (
+        {scheduledDate ? (
           <span className="text-[11px] text-[#5B6B7F] flex items-center gap-1 mt-0.5">
             <Calendar className="w-3 h-3 text-[#0A7469]" />
             Prog: {scheduledDate}
+          </span>
+        ) : (
+          <span className="text-[10px] text-slate-400 mt-0.5">
+            Fecha por confirmar
           </span>
         )}
       </div>

@@ -9,6 +9,7 @@ import {
   X,
   RefreshCw,
   Download,
+  CalendarCheck,
 } from 'lucide-react';
 import {
   FactumfluxClient,
@@ -91,6 +92,12 @@ export default function App() {
   const [csvType, setCsvType] = useState<'po' | 'gr' | 'ses'>('po');
   const [isUploadingCSV, setIsUploadingCSV] = useState(false);
   const csvFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Payment scheduling modal state
+  const [schedulingInvoice, setSchedulingInvoice] = useState<InvoiceSummary | null>(null);
+  const [scheduledDateInput, setScheduledDateInput] = useState('');
+  const [paymentStatusInput, setPaymentStatusInput] = useState<string>('Pendiente');
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
   // System Modal Dialog state
   const [systemModal, setSystemModal] = useState<{
@@ -497,6 +504,17 @@ export default function App() {
                               >
                                 Post SAP
                               </button>
+                              <button
+                                onClick={() => {
+                                  setSchedulingInvoice(inv);
+                                  setScheduledDateInput(inv.payment_scheduled_date || new Date().toISOString().split('T')[0]);
+                                  setPaymentStatusInput(inv.payment_status || 'Pendiente');
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-semibold border border-amber-200 shadow-sm transition-colors"
+                                title="Programar fecha de abono o registrar pago"
+                              >
+                                Programar
+                              </button>
                             </td>
                           </tr>
                         ))
@@ -777,6 +795,108 @@ export default function App() {
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL PROGRAMACIÓN DE PAGO ────────────────────────────────── */}
+      {schedulingInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#E2E7EE] space-y-5">
+            <div className="flex items-center justify-between border-b border-[#E2E7EE] pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-50 text-[#0A7469]">
+                  <CalendarCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-[#0B2545] text-base">Programar Pago de Factura</h3>
+                  <p className="text-xs text-[#5B6B7F] font-mono">{schedulingInvoice.series}-{schedulingInvoice.number}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSchedulingInvoice(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="p-3 bg-[#F8FAFC] rounded-xl border border-[#E2E7EE] space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-[#5B6B7F]">Proveedor:</span>
+                  <span className="font-semibold text-[#0B2545]">{schedulingInvoice.supplier_name || 'Proveedor'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#5B6B7F]">Monto Total:</span>
+                  <span className="font-bold text-[#0B2545]">
+                    {schedulingInvoice.currency === 'PEN' ? 'S/' : '$'}{' '}
+                    {schedulingInvoice.total_amount.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[#0B2545] font-semibold mb-1">
+                  Fecha Estimada de Pago (Tesorería / ERP)
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={scheduledDateInput}
+                  onChange={(e) => setScheduledDateInput(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-[#0B2545] font-medium focus:outline-none focus:border-[#0A7469]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[#0B2545] font-semibold mb-1">
+                  Estado del Pago
+                </label>
+                <select
+                  value={paymentStatusInput}
+                  onChange={(e) => setPaymentStatusInput(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-[#0B2545] font-medium focus:outline-none focus:border-[#0A7469]"
+                >
+                  <option value="Pendiente">Pendiente (Fecha Programada)</option>
+                  <option value="Pagado">Pagado (Abono Bancario Realizado)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-[#E2E7EE]">
+              <button
+                type="button"
+                onClick={() => setSchedulingInvoice(null)}
+                className="px-4 py-2 rounded-xl text-[#5B6B7F] hover:bg-slate-100 font-semibold text-xs transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isSavingSchedule}
+                onClick={async () => {
+                  setIsSavingSchedule(true);
+                  try {
+                    await client.scheduleInvoicePayment(schedulingInvoice.id, {
+                      payment_scheduled_date: scheduledDateInput,
+                      payment_status: paymentStatusInput,
+                    });
+                    setActionMessage('Programación de pago guardada exitosamente.');
+                    setSchedulingInvoice(null);
+                    await loadInvoicesAndOrders();
+                  } catch (err: any) {
+                    showErrorModal('Error al Programar Pago', err.message || 'No se pudo guardar la fecha de pago.');
+                  } finally {
+                    setIsSavingSchedule(false);
+                  }
+                }}
+                className="px-5 py-2.5 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-bold text-xs transition-all shadow-md shadow-[#0A7469]/20 disabled:opacity-50"
+              >
+                {isSavingSchedule ? 'Guardando...' : 'Confirmar Programación'}
+              </button>
             </div>
           </div>
         </div>
