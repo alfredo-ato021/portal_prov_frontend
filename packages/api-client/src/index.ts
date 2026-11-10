@@ -596,6 +596,102 @@ export interface ClientDashboardStats {
   negotiable_risk_count: number;
 }
 
+// Qualification & Document Wallet Interfaces (Phase 7)
+export interface WalletDocument {
+  id: string;
+  supplier_id: string;
+  document_type_code: string;
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  sha256_hash: string;
+  issue_date?: string;
+  expiry_date?: string;
+  status: 'VIGENTE' | 'POR_VENCER' | 'VENCIDO' | 'OBSOLETO';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TenantDocumentType {
+  id: string;
+  tenant_id: string;
+  code: string;
+  name: string;
+  description: string;
+  country: string;
+  person_type: 'NATURAL' | 'JURIDICA' | 'AMBAS';
+  required_level: number;
+  is_mandatory: boolean;
+  validity_days_from_issue?: number;
+  requires_expiry_date: boolean;
+  validation_mode: string;
+  is_active: boolean;
+}
+
+export interface QualificationPolicy {
+  tenant_id: string;
+  min_required_level: number;
+  enforce_qualification_to_invoice: boolean;
+  allow_grace_period_days: number;
+  notify_expiry_days_before: number[];
+  auto_validate_sunat: boolean;
+  auto_validate_bank_cci: boolean;
+}
+
+export interface LinkedQualificationDocument {
+  document_type: TenantDocumentType;
+  wallet_document?: WalletDocument;
+  doc_status: 'PENDIENTE' | 'APROBADO' | 'OBSERVADO' | 'RECHAZADO';
+  reviewer_notes: string;
+  is_expired: boolean;
+  days_until_expiry?: number;
+}
+
+export interface SupplierQualificationResponse {
+  policy: QualificationPolicy;
+  qualification_id: string;
+  tenant_id: string;
+  tenant_name: string;
+  supplier_id: string;
+  stage: 'REGISTRO_BASICO' | 'CALIFICACION_RIESGO' | 'COMPLETO';
+  current_level: number;
+  status: 'BORRADOR' | 'ENVIADO' | 'EN_REVISION' | 'OBSERVADO' | 'APROBADO' | 'RECHAZADO' | 'VENCIDO' | 'SUSPENDIDO';
+  observation_notes?: string;
+  rejection_reason?: string;
+  approved_at?: string;
+  expires_at?: string;
+  general_data: Record<string, any>;
+  can_invoice: boolean;
+  block_reason?: string;
+  documents: LinkedQualificationDocument[];
+}
+
+export interface SupplierTenantItem {
+  tenant_id: string;
+  tenant_name: string;
+  tenant_ruc: string;
+  status: string;
+  qualification_status: string;
+  current_level: number;
+  can_invoice: boolean;
+}
+
+export interface BackofficeSupplierReviewItem {
+  supplier_id: string;
+  qualification_id: string;
+  ruc: string;
+  legal_name: string;
+  stage: string;
+  current_level: number;
+  status: string;
+  submitted_at: string;
+  approved_at?: string;
+  expires_at?: string;
+  total_documents_count: number;
+  approved_docs_count: number;
+  pending_docs_count: number;
+}
+
 export class FactumfluxClient {
   private baseUrl: string;
   private tenantId?: string;
@@ -1195,6 +1291,87 @@ export class FactumfluxClient {
   ): Promise<{ success: boolean; message: string; invoice_id: string; payment_scheduled_date: string }> {
     return this.fetch(`/api/v1/backoffice/invoices/${invoiceId}/payment-schedule`, {
       method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // ── PHASE 7: SUPPLIER QUALIFICATION & WALLET ─────────────────────────────
+  async listSupplierTenants(): Promise<SupplierTenantItem[]> {
+    return this.fetch('/api/v1/supplier/global/tenants');
+  }
+
+  async listSupplierWalletDocuments(): Promise<WalletDocument[]> {
+    return this.fetch('/api/v1/supplier/global/wallet/documents');
+  }
+
+  async uploadSupplierWalletDocument(formData: FormData): Promise<{ success: boolean; document_id: string; file_name: string; sha256_hash: string; message: string }> {
+    const url = `${this.baseUrl}/api/v1/supplier/global/wallet/documents`;
+    const headers: Record<string, string> = {};
+    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+    if (this.supplierRuc) headers['X-Supplier-RUC'] = this.supplierRuc;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (!response.ok) {
+      let errorMsg = `HTTP Error ${response.status}: ${response.statusText}`;
+      try {
+        const errorJson = await response.json();
+        errorMsg = errorJson.error || errorJson.message || errorMsg;
+      } catch {}
+      throw new Error(errorMsg);
+    }
+    return response.json();
+  }
+
+  getWalletDocumentContentUrl(documentId: string): string {
+    const params = new URLSearchParams();
+    if (this.supplierRuc) params.append('supplier_ruc', this.supplierRuc);
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    return `${this.baseUrl}/api/v1/supplier/global/wallet/documents/${encodeURIComponent(documentId)}/content${queryString}`;
+  }
+
+  async getSupplierQualification(): Promise<SupplierQualificationResponse> {
+    return this.fetch('/api/v1/supplier/qualification');
+  }
+
+  async saveSupplierQualificationDraft(data: {
+    stage?: string;
+    general_data: Record<string, any>;
+    linked_document_ids?: Record<string, string>;
+  }): Promise<{ success: boolean; qualification_id: string; status: string; message: string }> {
+    return this.fetch('/api/v1/supplier/qualification/draft', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async submitSupplierQualification(): Promise<{ success: boolean; status: string; message: string }> {
+    return this.fetch('/api/v1/supplier/qualification/submit', {
+      method: 'POST',
+    });
+  }
+
+  async listBackofficeSupplierQualifications(statusFilter?: string): Promise<BackofficeSupplierReviewItem[]> {
+    const query = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : '';
+    return this.fetch(`/api/v1/backoffice/qualification/suppliers${query}`);
+  }
+
+  async reviewSupplierQualification(supplierId: string, data: {
+    action: 'APPROVE' | 'OBSERVE' | 'REJECT';
+    level_granted?: number;
+    observation_notes?: string;
+    rejection_reason?: string;
+    validity_days?: number;
+    document_reviews?: Array<{
+      document_type_id: string;
+      status: 'APROBADO' | 'OBSERVADO' | 'RECHAZADO';
+      notes?: string;
+    }>;
+  }): Promise<{ success: boolean; action: string; message: string }> {
+    return this.fetch(`/api/v1/backoffice/qualification/suppliers/${encodeURIComponent(supplierId)}/review`, {
+      method: 'POST',
       body: JSON.stringify(data),
     });
   }
