@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   FileText,
@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Building2,
   Package,
+  Printer,
 } from 'lucide-react';
 import {
   FactumfluxClient,
@@ -45,22 +46,46 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   const [grePdfLoading, setGrePdfLoading] = useState(false);
   const [grePdfError, setGrePdfError] = useState<string | null>(null);
 
+  // Keep track of mount state and active fetches across re-renders
+  const isMountedRef = useRef(true);
+  const pdfBlobUrlRef = useRef<string | null>(null);
+  const grePdfBlobUrlRef = useRef<string | null>(null);
+  const isFetchingPdfRef = useRef(false);
+  const isFetchingGrePdfRef = useRef(false);
+
   useEffect(() => {
-    let isMounted = true;
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (pdfBlobUrlRef.current) URL.revokeObjectURL(pdfBlobUrlRef.current);
+      if (grePdfBlobUrlRef.current) URL.revokeObjectURL(grePdfBlobUrlRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    pdfBlobUrlRef.current = pdfBlobUrl;
+  }, [pdfBlobUrl]);
+
+  useEffect(() => {
+    grePdfBlobUrlRef.current = grePdfBlobUrl;
+  }, [grePdfBlobUrl]);
+
+  useEffect(() => {
+    let isCurrent = true;
     const fetchInvoice = async () => {
       setLoading(true);
       setError(null);
       try {
         const data = await client.getSupplierInvoiceDetail(invoiceId);
-        if (isMounted) {
+        if (isCurrent && isMountedRef.current) {
           setDetail(data);
         }
       } catch (err: any) {
-        if (isMounted) {
+        if (isCurrent && isMountedRef.current) {
           setError(err.message || 'Error al obtener el detalle de la factura');
         }
       } finally {
-        if (isMounted) {
+        if (isCurrent && isMountedRef.current) {
           setLoading(false);
         }
       }
@@ -71,59 +96,78 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
     }
 
     return () => {
-      isMounted = false;
-      if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
-      if (grePdfBlobUrl) URL.revokeObjectURL(grePdfBlobUrl);
+      isCurrent = false;
     };
   }, [invoiceId, client]);
 
   // Lazy load PDF blob when PDF tab is opened
   useEffect(() => {
-    let isMounted = true;
-    if (activeTab === 'pdf' && !pdfBlobUrl && !pdfLoading && !pdfError) {
-      setPdfLoading(true);
-      client
-        .fetchInvoicePdfBlob(invoiceId, true)
-        .then((blob) => {
-          if (isMounted) {
-            const url = URL.createObjectURL(blob);
-            setPdfBlobUrl(url);
-          }
-        })
-        .catch((err) => {
-          if (isMounted) {
-            setPdfError(err.message || 'No se pudo cargar el archivo PDF original');
-          }
-        })
-        .finally(() => {
-          if (isMounted) setPdfLoading(false);
-        });
+    if (!detail) return;
+
+    if (activeTab === 'pdf') {
+      if (!detail.has_pdf) {
+        // No original PDF uploaded in database. Transition immediately to fallback voucher view.
+        setPdfLoading(false);
+        return;
+      }
+
+      if (!pdfBlobUrl && !pdfError && !isFetchingPdfRef.current) {
+        isFetchingPdfRef.current = true;
+        setPdfLoading(true);
+        client
+          .fetchInvoicePdfBlob(invoiceId, true)
+          .then((blob) => {
+            if (isMountedRef.current) {
+              const url = URL.createObjectURL(blob);
+              setPdfBlobUrl(url);
+            }
+          })
+          .catch((err) => {
+            if (isMountedRef.current) {
+              setPdfError(err.message || 'No se pudo cargar el archivo PDF original');
+            }
+          })
+          .finally(() => {
+            isFetchingPdfRef.current = false;
+            if (isMountedRef.current) {
+              setPdfLoading(false);
+            }
+          });
+      }
     }
 
-    if (activeTab === 'gre_pdf' && !grePdfBlobUrl && !grePdfLoading && !grePdfError) {
-      setGrePdfLoading(true);
-      client
-        .fetchInvoiceGrePdfBlob(invoiceId, true)
-        .then((blob) => {
-          if (isMounted) {
-            const url = URL.createObjectURL(blob);
-            setGrePdfBlobUrl(url);
-          }
-        })
-        .catch((err) => {
-          if (isMounted) {
-            setGrePdfError(err.message || 'No se pudo cargar el archivo PDF de la Guía de Remisión');
-          }
-        })
-        .finally(() => {
-          if (isMounted) setGrePdfLoading(false);
-        });
-    }
+    if (activeTab === 'gre_pdf') {
+      if (!detail.has_gre_pdf) {
+        // No GRE PDF uploaded. Show GRE data card immediately.
+        setGrePdfLoading(false);
+        return;
+      }
 
-    return () => {
-      isMounted = false;
-    };
-  }, [activeTab, invoiceId, client, pdfBlobUrl, pdfLoading, pdfError, grePdfBlobUrl, grePdfLoading, grePdfError]);
+      if (!grePdfBlobUrl && !grePdfError && !isFetchingGrePdfRef.current) {
+        isFetchingGrePdfRef.current = true;
+        setGrePdfLoading(true);
+        client
+          .fetchInvoiceGrePdfBlob(invoiceId, true)
+          .then((blob) => {
+            if (isMountedRef.current) {
+              const url = URL.createObjectURL(blob);
+              setGrePdfBlobUrl(url);
+            }
+          })
+          .catch((err) => {
+            if (isMountedRef.current) {
+              setGrePdfError(err.message || 'No se pudo cargar el archivo PDF de la Guía de Remisión');
+            }
+          })
+          .finally(() => {
+            isFetchingGrePdfRef.current = false;
+            if (isMountedRef.current) {
+              setGrePdfLoading(false);
+            }
+          });
+      }
+    }
+  }, [activeTab, detail, invoiceId, client, pdfBlobUrl, pdfError, grePdfBlobUrl, grePdfError]);
 
   const getStatusBadge = (status?: string) => {
     switch (status) {
@@ -262,8 +306,12 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
           >
             <Eye className="w-4 h-4" />
             Visualizar Factura (PDF)
-            {detail?.has_pdf && (
+            {detail?.has_pdf ? (
               <span className="w-2 h-2 rounded-full bg-emerald-500" title="Archivo PDF original disponible" />
+            ) : (
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 font-normal">
+                Digital
+              </span>
             )}
           </button>
 
@@ -272,14 +320,18 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
               onClick={() => setActiveTab('gre_pdf')}
               className={`py-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all ${
                 activeTab === 'gre_pdf'
-                  ? 'border-[#0A7469] text-[#0A7469]'
+                  ? 'border-cyan-600 text-cyan-700'
                   : 'border-transparent text-[#5B6B7F] hover:text-[#0B2545]'
               }`}
             >
               <Truck className="w-4 h-4" />
               Guía de Remisión (PDF)
-              {detail?.has_gre_pdf && (
-                <span className="w-2 h-2 rounded-full bg-emerald-500" title="Archivo PDF de GRE disponible" />
+              {detail?.has_gre_pdf ? (
+                <span className="w-2 h-2 rounded-full bg-cyan-500" title="Archivo PDF original de GRE disponible" />
+              ) : (
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 font-normal">
+                  Datos
+                </span>
               )}
             </button>
           )}
@@ -561,6 +613,14 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
                             {' '}Se presenta la <strong>Representación Impresa Digital oficial</strong> basada en el XML UBL 2.1 validado ante SUNAT.
                           </span>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => window.print()}
+                          className="px-3 py-1.5 bg-white border border-amber-300 hover:bg-amber-100 rounded-lg text-amber-900 font-semibold flex items-center gap-1.5 shadow-sm transition-colors text-xs flex-shrink-0 ml-4"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          Imprimir Comprobante
+                        </button>
                       </div>
 
                       {/* Electronic Voucher Paper Preview */}
