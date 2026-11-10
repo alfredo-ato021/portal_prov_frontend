@@ -8,9 +8,11 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  ShieldCheck,
+  FolderLock,
 } from 'lucide-react';
 
-export type SupplierNavTab = 'dashboard' | 'invoices' | 'upload' | 'account' | 'whatsapp';
+export type SupplierNavTab = 'dashboard' | 'invoices' | 'upload' | 'qualification' | 'wallet' | 'account' | 'whatsapp';
 
 interface SidebarProps {
   currentTab: SupplierNavTab;
@@ -48,8 +50,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'upload' as SupplierNavTab,
       label: 'Cargar Factura',
       icon: UploadCloud,
-      badge: 'Nuevo',
+      badge: null,
       highlight: true,
+    },
+    {
+      id: 'qualification' as SupplierNavTab,
+      label: 'Homologación',
+      icon: ShieldCheck,
+      badge: null,
+    },
+    {
+      id: 'wallet' as SupplierNavTab,
+      label: 'Billetera Documentos',
+      icon: FolderLock,
+      badge: null,
     },
     {
       id: 'account' as SupplierNavTab,

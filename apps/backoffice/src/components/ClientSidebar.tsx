@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Shield,
+  ShieldCheck,
   Users,
   Cpu,
 } from 'lucide-react';
@@ -20,6 +21,7 @@ export type ClientNavTab =
   | 'sire_negotiable'
   | 'policies'
   | 'suppliers'
+  | 'qualification'
   | 'integrations';
 
 interface ClientSidebarProps {
@@ -77,6 +79,12 @@ export const ClientSidebar: React.FC<ClientSidebarProps> = ({
       label: 'Directorio Proveedores',
       icon: Users,
       badge: null,
+    },
+    {
+      id: 'qualification' as ClientNavTab,
+      label: 'Homologación Proveedores',
+      icon: ShieldCheck,
+      badge: 'Auditoría',
     },
     {
       id: 'integrations' as ClientNavTab,

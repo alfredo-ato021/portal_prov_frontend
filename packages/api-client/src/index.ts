@@ -1375,4 +1375,15 @@ export class FactumfluxClient {
       body: JSON.stringify(data),
     });
   }
+
+  async getQualificationPolicy(): Promise<QualificationPolicy> {
+    return this.fetch('/api/v1/backoffice/qualification/policy');
+  }
+
+  async updateQualificationPolicy(policy: Partial<QualificationPolicy>): Promise<{ success: boolean; message: string }> {
+    return this.fetch('/api/v1/backoffice/qualification/policy', {
+      method: 'PUT',
+      body: JSON.stringify(policy),
+    });
+  }
 }

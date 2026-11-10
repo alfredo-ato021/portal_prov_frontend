@@ -15,6 +15,7 @@ import {
   Info,
   RefreshCw,
   Clock,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   FactumfluxClient,
@@ -27,13 +28,19 @@ interface UploadInvoiceViewProps {
   client: FactumfluxClient;
   onSuccess: () => void;
   onCancel: () => void;
+  onNavigateToQualification?: () => void;
 }
 
 export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
   client,
   onSuccess,
   onCancel,
+  onNavigateToQualification,
 }) => {
+  const [qualificationBlock, setQualificationBlock] = useState<{
+    canInvoice: boolean;
+    reason?: string;
+  }>({ canInvoice: true });
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // Step 1: PO / OS List & Selection
@@ -72,7 +79,17 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+    client.getSupplierQualification()
+      .then((res) => {
+        if (!res.can_invoice) {
+          setQualificationBlock({
+            canInvoice: false,
+            reason: res.block_reason || 'La empresa cliente exige homologación aprobada para autorizar la emisión de comprobantes.',
+          });
+        }
+      })
+      .catch(() => {});
+  }, [client]);
 
   const handleSelectOrder = (order: SupplierPurchaseOrder) => {
     if (!order.can_upload_invoice) {
@@ -355,6 +372,30 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
           Cancelar y Volver
         </button>
       </div>
+
+      {/* Qualification Warning Banner */}
+      {!qualificationBlock.canInvoice && (
+        <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl text-amber-900 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-amber-100 rounded-xl text-amber-800 flex-shrink-0">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="font-bold text-amber-950 block">Homologación Previa Requerida para Facturar</span>
+              <span>{qualificationBlock.reason}</span>
+            </div>
+          </div>
+          {onNavigateToQualification && (
+            <button
+              type="button"
+              onClick={onNavigateToQualification}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors flex-shrink-0"
+            >
+              Completar Homologación
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Visual Stepper */}
       <div className="bg-white rounded-2xl p-4 border border-[#E2E7EE] shadow-sm">

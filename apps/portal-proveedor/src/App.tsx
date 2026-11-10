@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react';
-import { FactumfluxClient } from '@factumflux/api-client';
+import { FactumfluxClient, SupplierTenantItem } from '@factumflux/api-client';
 import { LoginScreen } from './components/LoginScreen';
 import { SupplierOnboardingScreen } from './components/SupplierOnboardingScreen';
 import { Sidebar, SupplierNavTab } from './components/Sidebar';
 import { DashboardView } from './components/DashboardView';
 import { InvoicesListView } from './components/InvoicesListView';
 import { UploadInvoiceView } from './components/UploadInvoiceView';
+import { QualificationView } from './components/QualificationView';
+import { DocumentWalletView } from './components/DocumentWalletView';
 import { AccountProfileView } from './components/AccountProfileView';
 import { WhatsAppAssistantView } from './components/WhatsAppAssistantView';
+import { WorkspacePickerModal } from './components/WorkspacePickerModal';
+import { ChevronDown } from 'lucide-react';
 
 const apiBaseUrl =
   (import.meta as any).env?.VITE_API_BASE_URL ||
@@ -63,6 +67,10 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<SupplierNavTab>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
+  // Multi-tenant Workspace Picker state
+  const [tenantsList, setTenantsList] = useState<SupplierTenantItem[]>([]);
+  const [isWorkspacePickerOpen, setIsWorkspacePickerOpen] = useState(false);
+
   useEffect(() => {
     if (supplierInfo.tenantId) {
       client.setTenantId(supplierInfo.tenantId);
@@ -74,6 +82,51 @@ export default function App() {
       client.setSupplierRuc(supplierInfo.ruc);
     }
   }, [supplierInfo]);
+
+  // Load tenant list for Workspace Picker & Context Switcher
+  const loadTenants = async () => {
+    if (!isAuthenticated) return;
+    try {
+      const list = await client.listSupplierTenants();
+      setTenantsList(list || []);
+
+      if (list && list.length > 0) {
+        const found = list.find((t) => t.tenant_id === supplierInfo.tenantId);
+        if (!found && !supplierInfo.tenantId) {
+          if (list.length === 1) {
+            handleSelectTenant(list[0]);
+          } else {
+            setIsWorkspacePickerOpen(true);
+          }
+        } else if (found && !supplierInfo.tenantName) {
+          setSupplierInfo((prev: any) => ({
+            ...prev,
+            tenantName: found.tenant_name,
+          }));
+        }
+      }
+    } catch (err) {
+      console.error('Error cargando lista de empresas del proveedor:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadTenants();
+  }, [isAuthenticated, supplierInfo.ruc]);
+
+  const handleSelectTenant = (t: SupplierTenantItem) => {
+    client.setTenantId(t.tenant_id);
+    setSupplierInfo((prev: any) => {
+      const updated = {
+        ...prev,
+        tenantId: t.tenant_id,
+        tenantName: t.tenant_name,
+      };
+      localStorage.setItem('factumflux_supplier_info', JSON.stringify(updated));
+      return updated;
+    });
+    setIsWorkspacePickerOpen(false);
+  };
 
   const handleLogin = (credentials: {
     ruc: string;
@@ -150,14 +203,25 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F8FAFC]">
         {/* Top Navbar */}
         <header className="h-16 px-6 border-b border-[#E2E7EE] bg-white flex items-center justify-between flex-shrink-0 z-10 shadow-sm">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#E8F4F2] text-[#0A7469] border border-[#0A7469]/20 uppercase tracking-wider">
               Portal Proveedor
             </span>
             <span className="text-[#5B6B7F] text-xs">•</span>
-            <span className="text-xs text-[#5B6B7F] truncate max-w-xs md:max-w-md">
-              Cliente: <strong className="text-[#0B2545]">{supplierInfo.tenantName || 'Empresa Cliente'}</strong>
-            </span>
+
+            {/* Interactive Tenant Switcher (Topbar Context Switcher) */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-[#5B6B7F] hidden sm:inline">Cliente Activo:</span>
+              <button
+                type="button"
+                onClick={() => setIsWorkspacePickerOpen(true)}
+                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg text-xs font-bold text-[#0B2545] flex items-center gap-1.5 transition-colors"
+                title="Cambiar de empresa cliente"
+              >
+                <span className="truncate max-w-[180px] md:max-w-xs">{supplierInfo.tenantName || 'Seleccionar Empresa'}</span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center gap-3 text-xs">
@@ -172,6 +236,7 @@ export default function App() {
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
           {currentTab === 'dashboard' && (
             <DashboardView
+              key={`${supplierInfo.tenantId}-${supplierInfo.ruc}`}
               client={client}
               onNavigateToUpload={() => setCurrentTab('upload')}
               onNavigateToInvoices={() => setCurrentTab('invoices')}
@@ -180,6 +245,7 @@ export default function App() {
 
           {currentTab === 'invoices' && (
             <InvoicesListView
+              key={`${supplierInfo.tenantId}-${supplierInfo.ruc}`}
               client={client}
               onNavigateToUpload={() => setCurrentTab('upload')}
             />
@@ -187,9 +253,27 @@ export default function App() {
 
           {currentTab === 'upload' && (
             <UploadInvoiceView
+              key={`${supplierInfo.tenantId}-${supplierInfo.ruc}`}
               client={client}
               onSuccess={() => setCurrentTab('invoices')}
               onCancel={() => setCurrentTab('dashboard')}
+              onNavigateToQualification={() => setCurrentTab('qualification')}
+            />
+          )}
+
+          {currentTab === 'qualification' && (
+            <QualificationView
+              key={`${supplierInfo.tenantId}-${supplierInfo.ruc}`}
+              client={client}
+              onNavigateToWallet={() => setCurrentTab('wallet')}
+              onNavigateToUpload={() => setCurrentTab('upload')}
+            />
+          )}
+
+          {currentTab === 'wallet' && (
+            <DocumentWalletView
+              client={client}
+              onLinkToQualification={() => setCurrentTab('qualification')}
             />
           )}
 
@@ -202,6 +286,16 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {/* Workspace Picker Modal */}
+      <WorkspacePickerModal
+        isOpen={isWorkspacePickerOpen}
+        onClose={() => setIsWorkspacePickerOpen(false)}
+        tenants={tenantsList}
+        activeTenantId={supplierInfo.tenantId}
+        onSelectTenant={handleSelectTenant}
+        isClosable={!!supplierInfo.tenantId}
+      />
     </div>
   );
 }

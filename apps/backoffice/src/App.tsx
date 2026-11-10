@@ -24,6 +24,7 @@ import { ClientDashboardView } from './components/ClientDashboardView';
 import { SireAndNegotiableUnifiedView } from './components/SireAndNegotiableUnifiedView';
 import { ClientSuppliersView } from './components/ClientSuppliersView';
 import { ClientIntegrationsView } from './components/ClientIntegrationsView';
+import { ClientQualificationView } from './components/ClientQualificationView';
 import { SuperAdminConsoleView } from './components/SuperAdminConsoleView';
 import { PurchaseOrderDetailModal } from './components/PurchaseOrderDetailModal';
 import { SystemModal, SystemModalType } from '@factumflux/ui';
@@ -767,6 +768,15 @@ export default function App() {
           {/* Suppliers Directory Tab */}
           {currentTab === 'suppliers' && (
             <ClientSuppliersView
+              client={client}
+              tenantId={tenantInfo.tenantId}
+              tenantName={tenantInfo.tenantName}
+            />
+          )}
+
+          {/* Supplier Qualification Tab */}
+          {currentTab === 'qualification' && (
+            <ClientQualificationView
               client={client}
               tenantId={tenantInfo.tenantId}
               tenantName={tenantInfo.tenantName}
