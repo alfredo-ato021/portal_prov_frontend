@@ -181,8 +181,8 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
         list.push({
           id: `sire-${docNum}`,
           document_number: docNum,
-          supplier_name: (d as any).supplier_name || 'DISTRIBUIDORA DE ALIMENTOS DEL SUR S.A.C.',
-          supplier_ruc: d.supplier_ruc || '20601234567',
+          supplier_name: (d as any).supplier_name || 'AGROINDUSTRIAS 3 TORRES S.A.C.',
+          supplier_ruc: d.supplier_ruc || '20600433700',
           issue_date: d.issue_date || `${sirePeriod}-03`,
           sire_amount: d.sire_amount ?? d.sire_total,
           factumflux_amount: d.factumflux_amount ?? d.portal_total,
@@ -910,8 +910,8 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-slate-500 uppercase block">REMITENTE / CEDENTE (PROVEEDOR):</span>
-                        <strong className="text-slate-900 text-xs block">{selectedFactoringDoc.supplier_name || 'DISTRIBUIDORA DE ALIMENTOS DEL SUR S.A.C.'}</strong>
-                        <span className="text-slate-600 text-[11px] font-mono">RUC: 20601234567</span>
+                        <strong className="text-slate-900 text-xs block">{selectedFactoringDoc.supplier_name || 'AGROINDUSTRIAS 3 TORRES S.A.C.'}</strong>
+                        <span className="text-slate-600 text-[11px] font-mono">RUC: {(selectedFactoringDoc as any).supplier_ruc || '20600433700'}</span>
                         <span className="text-slate-500 text-[10px] block">Emisor del Comprobante de Pago Electrónico</span>
                       </div>
                     </div>
@@ -1017,7 +1017,7 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
                           <span className="font-cursive text-lg text-slate-700 italic select-none">Carlos Mendoza V.</span>
                         </div>
                         <div className="w-full border-t border-slate-400 pt-1 text-[10px] text-slate-600">
-                          <strong className="block text-slate-800">{selectedFactoringDoc.supplier_name || 'DISTRIBUIDORA DE ALIMENTOS DEL SUR S.A.C.'}</strong>
+                          <strong className="block text-slate-800">{selectedFactoringDoc.supplier_name || 'AGROINDUSTRIAS 3 TORRES S.A.C.'}</strong>
                           <span>Representante Legal (Cedente)</span>
                           <span className="block font-mono text-[9px] text-slate-400">Firmado digitalmente con UBL / DNIe</span>
                         </div>
@@ -1067,8 +1067,8 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                     <div className="p-3 bg-white rounded-lg border border-[#E2E7EE]">
                       <span className="text-[10px] uppercase font-bold text-[#5B6B7F] block mb-0.5">Cedente (Proveedor)</span>
-                      <strong className="block text-xs">{selectedFactoringDoc.supplier_name}</strong>
-                      <span className="text-[11px] text-[#5B6B7F] font-mono">RUC: 20601234567</span>
+                      <strong className="block text-xs">{selectedFactoringDoc.supplier_name || 'AGROINDUSTRIAS 3 TORRES S.A.C.'}</strong>
+                      <span className="text-[11px] text-[#5B6B7F] font-mono">RUC: {(selectedFactoringDoc as any).supplier_ruc || '20600433700'}</span>
                     </div>
 
                     <div className="p-3 bg-white rounded-lg border border-[#E2E7EE]">

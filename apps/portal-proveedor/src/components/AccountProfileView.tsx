@@ -66,8 +66,8 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
     } catch {
       setProfile({
         id: 'sup-demo-01',
-        ruc: '20601234567',
-        legal_name: 'Distribuidora de Alimentos del Sur S.A.C.',
+        ruc: '20600433700',
+        legal_name: 'AGROINDUSTRIAS 3 TORRES S.A.C.',
         sunat_status: 'ACTIVO',
         sunat_condition: 'HABIDO',
         is_verified: true,
@@ -328,12 +328,12 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs pt-1">
           <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-[#E2E7EE]">
             <span className="text-[#5B6B7F] block mb-1">RUC</span>
-            <strong className="text-[#0B2545] text-sm font-mono">{profile?.ruc || '20601234567'}</strong>
+            <strong className="text-[#0B2545] text-sm font-mono">{profile?.ruc || '20600433700'}</strong>
           </div>
           <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-[#E2E7EE] sm:col-span-2">
             <span className="text-[#5B6B7F] block mb-1">Razón Social</span>
             <strong className="text-[#0B2545] text-sm">
-              {profile?.legal_name || 'Distribuidora de Alimentos del Sur S.A.C.'}
+              {profile?.legal_name || 'AGROINDUSTRIAS 3 TORRES S.A.C.'}
             </strong>
           </div>
           <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-[#E2E7EE]">

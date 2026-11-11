@@ -465,10 +465,10 @@ export default function App() {
 
                             <td className="py-4 px-4">
                               <span className="font-semibold text-[#0B2545] block text-xs">
-                                {inv.supplier_name || 'Distribuidora de Alimentos del Sur S.A.C.'}
+                                {inv.supplier_name || 'AGROINDUSTRIAS 3 TORRES S.A.C.'}
                               </span>
                               <span className="text-[11px] font-mono text-[#5B6B7F]">
-                                {inv.supplier_ruc || '20601234567'}
+                                {inv.supplier_ruc || '20600433700'}
                               </span>
                             </td>
 
