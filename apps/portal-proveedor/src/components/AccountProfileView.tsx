@@ -726,11 +726,10 @@ export const AccountProfileView: React.FC<AccountProfileViewProps> = ({ client }
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-xs font-bold text-[#0B2545] truncate">{bank.bank_name}</span>
                   <span
-                    className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
-                      bank.currency === 'PEN'
+                    className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${bank.currency === 'PEN'
                         ? 'bg-[#E7F5EC] text-[#176B3F]'
                         : 'bg-[#E8EEF9] text-[#3A5A9B]'
-                    }`}
+                      }`}
                   >
                     {bank.currency}
                   </span>

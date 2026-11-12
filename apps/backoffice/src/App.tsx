@@ -125,8 +125,8 @@ export default function App() {
       type === 'po'
         ? 'plantilla_ordenes_compra.xlsx'
         : type === 'gr'
-        ? 'plantilla_entradas_almacen_migo.xlsx'
-        : 'plantilla_conformidades_servicio_hes.xlsx';
+          ? 'plantilla_entradas_almacen_migo.xlsx'
+          : 'plantilla_conformidades_servicio_hes.xlsx';
 
     try {
       const blob = await client.downloadTemplate(type);
@@ -179,7 +179,22 @@ export default function App() {
       ]);
       setInvoices(Array.isArray(invData) ? invData : []);
       setOrders(Array.isArray(poData) ? poData : []);
-      if (polData) setPolicy(polData);
+      if (polData) {
+        setPolicy(polData);
+      } else {
+        // Fallback default policy so matching policies tab is never blank
+        setPolicy({
+          tenant_id: tenantInfo.tenantId,
+          price_tolerance_pct: 0.05,
+          price_tolerance_abs: 1.0,
+          quantity_tolerance_pct: 0,
+          max_issue_days: 7,
+          require_hes_for_services: true,
+          require_migo_for_goods: true,
+          reject_non_habido: true,
+          custom_cel_expression: '',
+        });
+      }
     } catch {
       // Non-blocking
     } finally {
@@ -278,13 +293,13 @@ export default function App() {
         res = await client.uploadServiceEntrySheetsCSV(file);
       }
 
-      const typeLabel = res.file_type === 'gr' 
-        ? 'Entradas MIGO' 
-        : res.file_type === 'ses' 
-        ? 'Conformidades HES' 
-        : res.file_type === 'po'
-        ? 'Órdenes de Compra'
-        : 'ERP';
+      const typeLabel = res.file_type === 'gr'
+        ? 'Entradas MIGO'
+        : res.file_type === 'ses'
+          ? 'Conformidades HES'
+          : res.file_type === 'po'
+            ? 'Órdenes de Compra'
+            : 'ERP';
 
       setActionMessage(`Ingesta masiva exitosa: ${res.inserted_count} registros procesados (${typeLabel}).`);
       setIsIngestingCSV(false);
@@ -483,13 +498,12 @@ export default function App() {
 
                             <td className="py-4 px-4">
                               <span
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                                  inv.processing_status === 'Procesada/Contabilizada'
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${inv.processing_status === 'Procesada/Contabilizada'
                                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                     : inv.processing_status === 'Enviado'
-                                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                    : 'bg-amber-50 text-amber-700 border border-amber-200'
-                                }`}
+                                      ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                      : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  }`}
                               >
                                 {inv.processing_status || 'En revisión'}
                               </span>
@@ -497,11 +511,10 @@ export default function App() {
 
                             <td className="py-4 px-4">
                               <span
-                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                                  inv.payment_status === 'Pagado'
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${inv.payment_status === 'Pagado'
                                     ? 'bg-emerald-50 text-emerald-700'
                                     : 'bg-amber-50 text-amber-700'
-                                }`}
+                                  }`}
                               >
                                 {inv.payment_status || 'Pendiente'}
                               </span>
@@ -653,11 +666,10 @@ export default function App() {
                             </div>
                             {po.order_type && (
                               <span
-                                className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase mt-0.5 ${
-                                  po.order_type === 'BIEN'
+                                className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase mt-0.5 ${po.order_type === 'BIEN'
                                     ? 'bg-[#E8F4F2] text-[#0A7469]'
                                     : 'bg-[#EFF8FF] text-[#175CD3]'
-                                }`}
+                                  }`}
                               >
                                 {po.order_type}
                               </span>
@@ -678,22 +690,20 @@ export default function App() {
                                   {po.total_received_qty || 0} / {po.total_ordered_qty || 0} UN
                                 </span>
                                 <span
-                                  className={`font-semibold ${
-                                    (po.qty_percentage || 0) >= 100
+                                  className={`font-semibold ${(po.qty_percentage || 0) >= 100
                                       ? 'text-[#176B3F]'
                                       : (po.qty_percentage || 0) > 0
-                                      ? 'text-[#B54708]'
-                                      : 'text-[#5B6B7F]'
-                                  }`}
+                                        ? 'text-[#B54708]'
+                                        : 'text-[#5B6B7F]'
+                                    }`}
                                 >
                                   {po.qty_percentage || 0}%
                                 </span>
                               </div>
                               <div className="w-full bg-[#E2E7EE] h-1.5 rounded-full overflow-hidden">
                                 <div
-                                  className={`h-full transition-all duration-300 ${
-                                    (po.qty_percentage || 0) >= 100 ? 'bg-[#176B3F]' : 'bg-[#0A7469]'
-                                  }`}
+                                  className={`h-full transition-all duration-300 ${(po.qty_percentage || 0) >= 100 ? 'bg-[#176B3F]' : 'bg-[#0A7469]'
+                                    }`}
                                   style={{ width: `${Math.min(po.qty_percentage || 0, 100)}%` }}
                                 />
                               </div>
@@ -706,22 +716,20 @@ export default function App() {
                                   {po.currency} {(po.total_received_amount || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                 </span>
                                 <span
-                                  className={`font-semibold ${
-                                    (po.amount_percentage || 0) >= 100
+                                  className={`font-semibold ${(po.amount_percentage || 0) >= 100
                                       ? 'text-[#176B3F]'
                                       : (po.amount_percentage || 0) > 0
-                                      ? 'text-[#B54708]'
-                                      : 'text-[#5B6B7F]'
-                                  }`}
+                                        ? 'text-[#B54708]'
+                                        : 'text-[#5B6B7F]'
+                                    }`}
                                 >
                                   {po.amount_percentage || 0}%
                                 </span>
                               </div>
                               <div className="w-full bg-[#E2E7EE] h-1.5 rounded-full overflow-hidden">
                                 <div
-                                  className={`h-full transition-all duration-300 ${
-                                    (po.amount_percentage || 0) >= 100 ? 'bg-[#176B3F]' : 'bg-[#0A7469]'
-                                  }`}
+                                  className={`h-full transition-all duration-300 ${(po.amount_percentage || 0) >= 100 ? 'bg-[#176B3F]' : 'bg-[#0A7469]'
+                                    }`}
                                   style={{ width: `${Math.min(po.amount_percentage || 0, 100)}%` }}
                                 />
                               </div>
@@ -793,72 +801,86 @@ export default function App() {
           )}
 
           {/* Matching Policies Tab */}
-          {currentTab === 'policies' && policy && (
-            <div className="max-w-3xl space-y-6">
-              <div>
-                <h1 className="text-2xl font-bold text-[#0B2545] tracking-tight flex items-center gap-2">
-                  <Sliders className="w-6 h-6 text-[#0A7469]" />
-                  Políticas de Cuadre y Tolerancias (CEL)
-                </h1>
-                <p className="text-sm text-[#5B6B7F] mt-1">
-                  Reglas dinámicas Common Expression Language (CEL) evaluadas en cada 3-Way Match.
-                </p>
+          {currentTab === 'policies' && (
+            policy ? (
+              <div className="max-w-3xl space-y-6">
+                <div>
+                  <h1 className="text-2xl font-bold text-[#0B2545] tracking-tight flex items-center gap-2">
+                    <Sliders className="w-6 h-6 text-[#0A7469]" />
+                    Políticas de Cuadre y Tolerancias (CEL)
+                  </h1>
+                  <p className="text-sm text-[#5B6B7F] mt-1">
+                    Reglas dinámicas Common Expression Language (CEL) evaluadas en cada 3-Way Match.
+                  </p>
+                </div>
+
+                <div className="bg-white rounded-2xl p-6 border border-[#E2E7EE] space-y-4 text-xs shadow-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[#5B6B7F] font-semibold mb-1">Tolerancia de Precio (%)</label>
+                      <input
+                        type="number"
+                        value={policy.price_tolerance_pct}
+                        onChange={(e) => setPolicy({ ...policy, price_tolerance_pct: parseFloat(e.target.value) })}
+                        className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono focus:outline-none focus:border-[#0A7469]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[#5B6B7F] font-semibold mb-1">Tolerancia Absoluta (PEN)</label>
+                      <input
+                        type="number"
+                        value={policy.price_tolerance_abs}
+                        onChange={(e) => setPolicy({ ...policy, price_tolerance_abs: parseFloat(e.target.value) })}
+                        className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono focus:outline-none focus:border-[#0A7469]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-2">
+                    <label className="flex items-center gap-2 text-[#0B2545] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={policy.require_hes_for_services}
+                        onChange={(e) => setPolicy({ ...policy, require_hes_for_services: e.target.checked })}
+                        className="rounded text-[#0A7469] focus:ring-[#0A7469]"
+                      />
+                      <span>Exigir Hoja de Entrada de Servicios (HES) aprobada para órdenes de servicio</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[#0B2545] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={policy.require_migo_for_goods}
+                        onChange={(e) => setPolicy({ ...policy, require_migo_for_goods: e.target.checked })}
+                        className="rounded text-[#0A7469] focus:ring-[#0A7469]"
+                      />
+                      <span>Exigir Entrada de Mercancías (GR/MIGO) para órdenes de bienes físicos</span>
+                    </label>
+                  </div>
+
+                  <button
+                    onClick={async () => {
+                      await client.updateTenantPolicy(policy);
+                      setActionMessage('Políticas de cuadre actualizadas exitosamente.');
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-bold text-xs shadow-sm transition-colors"
+                  >
+                    Guardar Políticas
+                  </button>
+                </div>
               </div>
-
-              <div className="bg-white rounded-2xl p-6 border border-[#E2E7EE] space-y-4 text-xs shadow-sm">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[#5B6B7F] font-semibold mb-1">Tolerancia de Precio (%)</label>
-                    <input
-                      type="number"
-                      value={policy.price_tolerance_pct}
-                      onChange={(e) => setPolicy({ ...policy, price_tolerance_pct: parseFloat(e.target.value) })}
-                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono focus:outline-none focus:border-[#0A7469]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[#5B6B7F] font-semibold mb-1">Tolerancia Absoluta (PEN)</label>
-                    <input
-                      type="number"
-                      value={policy.price_tolerance_abs}
-                      onChange={(e) => setPolicy({ ...policy, price_tolerance_abs: parseFloat(e.target.value) })}
-                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono focus:outline-none focus:border-[#0A7469]"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2 pt-2">
-                  <label className="flex items-center gap-2 text-[#0B2545] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={policy.require_hes_for_services}
-                      onChange={(e) => setPolicy({ ...policy, require_hes_for_services: e.target.checked })}
-                      className="rounded text-[#0A7469] focus:ring-[#0A7469]"
-                    />
-                    <span>Exigir Hoja de Entrada de Servicios (HES) aprobada para órdenes de servicio</span>
-                  </label>
-                  <label className="flex items-center gap-2 text-[#0B2545] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={policy.require_migo_for_goods}
-                      onChange={(e) => setPolicy({ ...policy, require_migo_for_goods: e.target.checked })}
-                      className="rounded text-[#0A7469] focus:ring-[#0A7469]"
-                    />
-                    <span>Exigir Entrada de Mercancías (GR/MIGO) para órdenes de bienes físicos</span>
-                  </label>
-                </div>
-
+            ) : (
+              <div className="bg-white rounded-2xl p-12 border border-[#E2E7EE] text-center max-w-xl mx-auto shadow-sm">
+                <RefreshCw className="w-8 h-8 text-[#0A7469] animate-spin mx-auto mb-3" />
+                <h3 className="text-sm font-bold text-[#0B2545]">Cargando políticas de matching...</h3>
+                <p className="text-xs text-[#5B6B7F] mt-1">Conectando con el motor de reglas CEL del Control Plane.</p>
                 <button
-                  onClick={async () => {
-                    await client.updateTenantPolicy(policy);
-                    setActionMessage('Políticas de cuadre actualizadas exitosamente.');
-                  }}
-                  className="px-5 py-2.5 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-bold text-xs shadow-sm transition-colors"
+                  onClick={() => client.getTenantPolicy().then((p) => p && setPolicy(p)).catch(() => {})}
+                  className="mt-4 px-4 py-2 bg-[#0A7469] text-white text-xs font-semibold rounded-lg hover:bg-[#085a52] transition-colors"
                 >
-                  Guardar Políticas
+                  Reintentar
                 </button>
               </div>
-            </div>
+            )
           )}
         </main>
       </div>

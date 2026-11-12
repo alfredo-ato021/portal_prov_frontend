@@ -361,21 +361,19 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
         <div className="flex items-center p-1 bg-white border border-[#E2E7EE] rounded-xl shadow-sm">
           <button
             onClick={() => setActiveTab('sire')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'sire'
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'sire'
                 ? 'bg-[#0A7469] text-white shadow-sm'
                 : 'text-[#5B6B7F] hover:text-[#0B2545]'
-            }`}
+              }`}
           >
             Conciliación SIRE & Plazo Preventivo 8 Días
           </button>
           <button
             onClick={() => setActiveTab('factoring')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
-              activeTab === 'factoring'
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${activeTab === 'factoring'
                 ? 'bg-[#0A7469] text-white shadow-sm'
                 : 'text-[#5B6B7F] hover:text-[#0B2545]'
-            }`}
+              }`}
           >
             <Landmark className="w-3.5 h-3.5" />
             <span>Facturas Cedidas a Factoring</span>
@@ -470,9 +468,8 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
             <div className="p-4 rounded-xl bg-white border border-[#E2E7EE] shadow-sm">
               <span className="text-[#5B6B7F] text-xs block mb-1">Discrepancias / Faltantes (Riesgo 8d)</span>
               <strong
-                className={`text-xl font-bold ${
-                  discrepanciesCount > 0 ? 'text-[#B42318]' : 'text-[#176B3F]'
-                }`}
+                className={`text-xl font-bold ${discrepanciesCount > 0 ? 'text-[#B42318]' : 'text-[#176B3F]'
+                  }`}
               >
                 {discrepanciesCount}
               </strong>
@@ -523,13 +520,12 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
                       return (
                         <tr
                           key={rec.id}
-                          className={`transition-colors ${
-                            isMissingInERP
+                          className={`transition-colors ${isMissingInERP
                               ? 'bg-amber-50/60 hover:bg-amber-100/50'
                               : isMismatch
-                              ? 'bg-rose-50/50 hover:bg-rose-100/50'
-                              : 'hover:bg-[#F8FAFC]'
-                          }`}
+                                ? 'bg-rose-50/50 hover:bg-rose-100/50'
+                                : 'hover:bg-[#F8FAFC]'
+                            }`}
                         >
                           <td className="py-3.5 px-4 font-mono font-bold">
                             {rec.document_number}
@@ -696,19 +692,18 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
 
                         <td className="py-4 px-4">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              op.status === 'DISBURSED'
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${op.status === 'DISBURSED'
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                 : op.status === 'CAVALI_REGISTERED'
-                                ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                                : 'bg-amber-50 text-amber-700 border border-amber-200'
-                            }`}
+                                  ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+                              }`}
                           >
                             {op.status === 'DISBURSED'
                               ? 'Desembolsado'
                               : op.status === 'CAVALI_REGISTERED'
-                              ? 'Anotado CAVALI'
-                              : 'En Trámite'}
+                                ? 'Anotado CAVALI'
+                                : 'En Trámite'}
                           </span>
                         </td>
 
@@ -766,11 +761,10 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
                   <button
                     type="button"
                     onClick={() => setDocModalTab('pdf')}
-                    className={`px-3 py-1.5 rounded-md font-semibold transition-colors flex items-center gap-1.5 ${
-                      docModalTab === 'pdf'
+                    className={`px-3 py-1.5 rounded-md font-semibold transition-colors flex items-center gap-1.5 ${docModalTab === 'pdf'
                         ? 'bg-[#0A7469] text-white shadow'
                         : 'text-slate-300 hover:text-white'
-                    }`}
+                      }`}
                   >
                     <FileText className="w-3.5 h-3.5" />
                     <span>Visor PDF</span>
@@ -778,11 +772,10 @@ export const SireAndNegotiableUnifiedView: React.FC<SireAndNegotiableUnifiedView
                   <button
                     type="button"
                     onClick={() => setDocModalTab('summary')}
-                    className={`px-3 py-1.5 rounded-md font-semibold transition-colors flex items-center gap-1.5 ${
-                      docModalTab === 'summary'
+                    className={`px-3 py-1.5 rounded-md font-semibold transition-colors flex items-center gap-1.5 ${docModalTab === 'summary'
                         ? 'bg-[#0A7469] text-white shadow'
                         : 'text-slate-300 hover:text-white'
-                    }`}
+                      }`}
                   >
                     <ShieldCheck className="w-3.5 h-3.5" />
                     <span>Ficha Resumen</span>
