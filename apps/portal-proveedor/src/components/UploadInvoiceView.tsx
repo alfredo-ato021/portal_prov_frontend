@@ -296,17 +296,15 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
             setGreSeries(s);
             setGreNumber(n);
             setFeReferencedGre({ series: s, number: n, raw: extractedGreId });
-            setGreValidation({
-              isValid: true,
-              type: 'success',
-              message: `Guía de Remisión ${extractedGreId} completada automáticamente desde el XML de la Factura (UBL 2.1).`,
-            });
           } else {
             setGreSeries(extractedGreId.toUpperCase());
             setFeReferencedGre({ series: extractedGreId, number: '', raw: extractedGreId });
           }
+          // Do not claim correspondence is verified until the GRE document itself is attached
+          setGreValidation(null);
         } else {
           setFeReferencedGre(null);
+          setGreValidation(null);
         }
 
         setParsedPreview({
@@ -1056,12 +1054,8 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
                           type: 'warning',
                           message: `Atención: La numeración ingresada (${val}-${greNumber}) no coincide con la Guía referenciada en la Factura Electrónica (${feReferencedGre.raw}).`,
                         });
-                      } else if (feReferencedGre) {
-                        setGreValidation({
-                          isValid: true,
-                          type: 'success',
-                          message: `Guía de Remisión ${feReferencedGre.raw} validada y conforme con la Factura Electrónica.`,
-                        });
+                      } else {
+                        setGreValidation(null);
                       }
                     }}
                     placeholder="T001"
@@ -1084,12 +1078,8 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
                           type: 'warning',
                           message: `Atención: La numeración ingresada (${greSeries}-${val}) no coincide con la Guía referenciada en la Factura Electrónica (${feReferencedGre.raw}).`,
                         });
-                      } else if (feReferencedGre) {
-                        setGreValidation({
-                          isValid: true,
-                          type: 'success',
-                          message: `Guía de Remisión ${feReferencedGre.raw} validada y conforme con la Factura Electrónica.`,
-                        });
+                      } else {
+                        setGreValidation(null);
                       }
                     }}
                     placeholder="00004521"
