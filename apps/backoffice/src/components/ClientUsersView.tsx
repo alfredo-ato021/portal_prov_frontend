@@ -58,7 +58,7 @@ const ROLE_LABELS: Record<string, { label: string; badgeClass: string; desc: str
 
 export const ClientUsersView: React.FC<ClientUsersViewProps> = ({
   client,
-  tenantId: _tenantId,
+  tenantId,
   tenantName,
 }) => {
   const [users, setUsers] = useState<BackofficeUser[]>([]);
@@ -92,6 +92,9 @@ export const ClientUsersView: React.FC<ClientUsersViewProps> = ({
     setLoading(true);
     setError(null);
     try {
+      if (tenantId) {
+        client.setTenantId(tenantId);
+      }
       const data = await client.listBackofficeUsers();
       setUsers(data || []);
     } catch (err: any) {
@@ -105,7 +108,7 @@ export const ClientUsersView: React.FC<ClientUsersViewProps> = ({
 
   useEffect(() => {
     loadUsers();
-  }, [client]);
+  }, [client, tenantId]);
 
   const openCreateModal = () => {
     setEditingUser(null);
@@ -215,9 +218,19 @@ export const ClientUsersView: React.FC<ClientUsersViewProps> = ({
 
       {/* Error Alert */}
       {error && (
-        <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span>{error}</span>
+        <div className="flex items-center justify-between p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button
+            onClick={loadUsers}
+            disabled={loading}
+            className="px-3 py-1 bg-white border border-rose-300 rounded-lg text-rose-700 hover:bg-rose-100 font-bold transition-colors flex items-center gap-1"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Reintentar</span>
+          </button>
         </div>
       )}
 
