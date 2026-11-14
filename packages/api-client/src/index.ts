@@ -196,6 +196,11 @@ export interface InvoiceSummary {
   payment_scheduled_date?: string;
   paid_at?: string;
   paid_amount?: number;
+  net_payable_amount?: number;
+  retention_rate?: number;
+  retention_amount?: number;
+  has_retention_suspension?: boolean;
+  professional_service_description?: string;
   rejection_reason?: string;
   action_required_note?: string;
 }
@@ -347,6 +352,26 @@ export interface SupplierPurchaseOrder {
   reception_doc: string;
   reception_date: string;
   can_upload_invoice: boolean;
+  message: string;
+}
+
+export interface UploadRHEResponse {
+  id: string;
+  document_type: string;
+  series: string;
+  number: string;
+  supplier_ruc: string;
+  supplier_name: string;
+  total_amount: number;
+  retention_rate: number;
+  retention_amount: number;
+  net_payable_amount: number;
+  currency: string;
+  state: string;
+  sunat_status: string;
+  has_retention_suspension: boolean;
+  suspension_form_number?: string;
+  professional_service_description?: string;
   message: string;
 }
 
@@ -1159,6 +1184,13 @@ export class FactumfluxClient {
 
   async uploadInvoiceMultipart(formData: FormData): Promise<any> {
     return this.fetch('/api/v1/supplier/invoices/upload', {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
+  async uploadSupplierRHE(formData: FormData): Promise<UploadRHEResponse> {
+    return this.fetch('/api/v1/supplier/invoices/upload-rhe', {
       method: 'POST',
       body: formData,
     });

@@ -141,6 +141,12 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
           : [],
     });
 
+    if (order.order_type === 'BIEN') {
+      setDocTypeToUpload('01');
+    }
+    if (order.total_amount) {
+      setRheTotalAmount(String(order.total_amount));
+    }
     setStep(2);
   };
 
@@ -154,7 +160,10 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
     );
   });
 
-  // Step 2: Invoice XML & PDF Upload
+  // Document Type to Upload: '01' (Factura Electrónica) | '02' (Recibo por Honorarios Electrónico)
+  const [docTypeToUpload, setDocTypeToUpload] = useState<'01' | '02'>('01');
+
+  // Step 2 (FE): Invoice XML & PDF Upload
   const [xmlFile, setXmlFile] = useState<File | null>(null);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [parsedPreview, setParsedPreview] = useState<{
@@ -175,6 +184,22 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
   const [greValidation, setGreValidation] = useState<{ isValid: boolean; message: string; type: 'success' | 'warning' | 'error' } | null>(null);
   const [feSuppInfo, setFeSuppInfo] = useState<{ supplierRuc: string; customerRuc: string } | null>(null);
 
+  // Step 2 (RHE Support - SUNAT Tipo 02):
+  const [rheFile, setRheFile] = useState<File | null>(null);
+  const [rheSeries, setRheSeries] = useState('E001');
+  const [rheNumber, setRheNumber] = useState('');
+  const [rheIssueDate, setRheIssueDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [rheTotalAmount, setRheTotalAmount] = useState<string>('');
+  const [rheServiceDescription, setRheServiceDescription] = useState('');
+  const [rheHasSuspension, setRheHasSuspension] = useState(false);
+  const [rheSuspensionFormNumber, setRheSuspensionFormNumber] = useState('');
+  const [rheSuspensionFile, setRheSuspensionFile] = useState<File | null>(null);
+
+  const numericRheTotal = parseFloat(rheTotalAmount) || 0;
+  const rheRetentionRate = (!rheHasSuspension && numericRheTotal > 1500) ? 8 : 0;
+  const rheRetentionAmount = (!rheHasSuspension && numericRheTotal > 1500) ? Math.round(numericRheTotal * 0.08 * 100) / 100 : 0;
+  const rheNetPayableAmount = Math.round((numericRheTotal - rheRetentionAmount) * 100) / 100;
+
   // Step 2: Factoring Externo
   const [isFactored, setIsFactored] = useState(false);
   const [factoringEntityName, setFactoringEntityName] = useState('InnovaFactoring S.A.');
@@ -189,6 +214,8 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
   const greXmlRef = useRef<HTMLInputElement>(null);
   const grePdfRef = useRef<HTMLInputElement>(null);
   const factoringLetterRef = useRef<HTMLInputElement>(null);
+  const rheFileInputRef = useRef<HTMLInputElement>(null);
+  const rheSuspensionInputRef = useRef<HTMLInputElement>(null);
 
   const demoPOs = [
     { code: 'OC-2026-8941', desc: 'Bien con Entrada de Mercancías (GR Aprobada)' },
@@ -436,6 +463,56 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
   };
 
   const handleSubmit = async () => {
+    if (docTypeToUpload === '02') {
+      if (!rheFile) {
+        setSubmitError('Debe adjuntar la representación oficial en PDF del Recibo por Honorarios Electrónico (RHE).');
+        return;
+      }
+      if (!rheNumber.trim()) {
+        setSubmitError('Debe ingresar el número correlativo del RHE.');
+        return;
+      }
+      if (numericRheTotal <= 0) {
+        setSubmitError('Debe ingresar un monto total válido de honorarios mayor a 0.');
+        return;
+      }
+      if (rheHasSuspension && !rheSuspensionFormNumber.trim()) {
+        setSubmitError('Si declara suspensión de retención, debe indicar el número de Formulario Virtual 1609 de SUNAT.');
+        return;
+      }
+
+      setIsSubmitting(true);
+      setSubmitError(null);
+
+      try {
+        const formData = new FormData();
+        formData.append('file', rheFile);
+        formData.append('series', (rheSeries.trim() || 'E001').toUpperCase());
+        formData.append('number', rheNumber.trim());
+        formData.append('issue_date', rheIssueDate);
+        formData.append('currency', poStatus?.currency || 'PEN');
+        formData.append('total_amount', String(numericRheTotal));
+        formData.append('po_number', poStatus?.po_number || poNumber);
+        formData.append('professional_service_description', rheServiceDescription.trim() || 'Servicios profesionales independientes');
+
+        if (rheHasSuspension) {
+          formData.append('has_retention_suspension', 'true');
+          formData.append('suspension_form_number', rheSuspensionFormNumber.trim());
+          if (rheSuspensionFile) {
+            formData.append('suspension_file', rheSuspensionFile);
+          }
+        }
+
+        await client.uploadSupplierRHE(formData);
+        setStep(3);
+      } catch (err: any) {
+        setSubmitError(err.message || 'Error al procesar la carga del Recibo por Honorarios.');
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
     if (!xmlFile) {
       setSubmitError('Debe adjuntar el archivo XML de la factura.');
       return;
@@ -507,10 +584,12 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
         <div>
           <h1 className="text-2xl font-bold text-[#0B2545] tracking-tight flex items-center gap-2">
             <UploadCloud className="w-6 h-6 text-[#0A7469]" />
-            Carga de Factura Electrónica
+            {docTypeToUpload === '02' ? 'Carga de Recibo por Honorarios (RHE)' : 'Carga de Factura Electrónica'}
           </h1>
           <p className="text-sm text-[#5B6B7F] mt-1">
-            Validación previa en ERP, lectura de XML UBL 2.1, cruce con Guía de Remisión y Cesión Factoring.
+            {docTypeToUpload === '02'
+              ? 'Validación previa de conformidad de servicio (HES), retención de 4ta categoría (8% o Form. 1609) y soporte oficial SUNAT.'
+              : 'Validación previa en ERP, lectura de XML UBL 2.1, cruce con Guía de Remisión y Cesión Factoring.'}
           </p>
         </div>
         <button
@@ -575,7 +654,9 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
             >
               {step > 2 ? <Check className="w-5 h-5" /> : '2'}
             </div>
-            <span className="text-xs font-semibold text-[#0B2545] mt-2">Carga XML & GRE</span>
+            <span className="text-xs font-semibold text-[#0B2545] mt-2">
+              {docTypeToUpload === '02' ? 'Carga RHE & Retención' : 'Carga XML & GRE'}
+            </span>
           </div>
 
           {/* Step 3 Indicator */}
@@ -860,14 +941,16 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
         </div>
       )}
 
-      {/* STEP 2: File Uploads, GRE & Factoring */}
+      {/* STEP 2: File Uploads, GRE, RHE & Factoring */}
       {step === 2 && (
         <div className="bg-white rounded-2xl p-6 border border-[#E2E7EE] shadow-sm space-y-6">
           <div className="border-b border-[#E2E7EE] pb-4 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-bold text-[#0B2545] flex items-center gap-2">
                 <FileText className="w-5 h-5 text-[#0A7469]" />
-                Paso 2: Carga de Factura Electrónica y Documentos de Soporte
+                {docTypeToUpload === '02'
+                  ? 'Paso 2: Carga de Recibo por Honorarios y Retención 4ta Categoría'
+                  : 'Paso 2: Carga de Factura Electrónica y Documentos de Soporte'}
               </h2>
               <p className="text-xs text-[#5B6B7F] mt-1">
                 Orden vinculada: <strong className="text-[#0B2545]">{poStatus?.po_number}</strong> ({poStatus?.order_type})
@@ -882,322 +965,608 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
             </button>
           </div>
 
-          {/* 1. Factura Electrónica (XML y PDF) */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-[#0B2545] flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#0A7469]" />
-              1. Comprobante de Pago Electrónico (XML y PDF)
-            </h3>
+          {/* Segmented Selector for Document Type */}
+          <div className="bg-[#F8FAFC] p-1.5 rounded-xl border border-[#E2E7EE] flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setDocTypeToUpload('01');
+                setSubmitError(null);
+              }}
+              className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                docTypeToUpload === '01'
+                  ? 'bg-white text-[#0A7469] shadow-sm border border-[#E2E7EE]'
+                  : 'text-[#5B6B7F] hover:text-[#0B2545]'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>Factura Electrónica (SUNAT 01)</span>
+              <span className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-[#E8F4F2] text-[#0A7469]">XML UBL 2.1</span>
+            </button>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* XML File Upload */}
-              <div className="p-5 rounded-xl border border-dashed border-[#0A7469]/40 bg-[#E8F4F2]/30 flex flex-col items-center justify-center text-center">
-                <FileUp className="w-8 h-8 text-[#0A7469] mb-2" />
-                <span className="text-xs font-bold text-[#0B2545] mb-1">Archivo XML UBL 2.1 (Obligatorio)</span>
-                <span className="text-[11px] text-[#5B6B7F] mb-3">
-                  {xmlFile ? xmlFile.name : 'Formato .xml con firma digital'}
-                </span>
-                <div className="flex gap-2">
-                  <input
-                    type="file"
-                    ref={xmlInputRef}
-                    accept=".xml"
-                    onChange={handleXMLFileChange}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => xmlInputRef.current?.click()}
-                    className="px-3 py-1.5 rounded-lg bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-semibold"
-                  >
-                    {xmlFile ? 'Cambiar XML' : 'Examinar XML'}
-                  </button>
-                </div>
-              </div>
-
-              {/* PDF File Upload */}
-              <div className="p-5 rounded-xl border border-dashed border-[#E2E7EE] bg-[#F8FAFC] flex flex-col items-center justify-center text-center">
-                <FileText className="w-8 h-8 text-[#5B6B7F] mb-2" />
-                <span className="text-xs font-bold text-[#0B2545] mb-1">Representación Impresa PDF (Recomendado)</span>
-                <span className="text-[11px] text-[#5B6B7F] mb-3">
-                  {pdfFile ? pdfFile.name : 'Formato .pdf legible'}
-                </span>
-                <input
-                  type="file"
-                  ref={pdfInputRef}
-                  accept=".pdf"
-                  onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  onClick={() => pdfInputRef.current?.click()}
-                  className="px-3 py-1.5 rounded-lg bg-white hover:bg-[#F3F5F8] text-[#5B6B7F] text-xs font-semibold border border-[#E2E7EE]"
-                >
-                  {pdfFile ? 'Cambiar PDF' : 'Examinar PDF'}
-                </button>
-              </div>
-            </div>
-
-            {/* XML Parsed Data Preview Card */}
-            {parsedPreview && (
-              <div className="p-4 rounded-xl bg-[#F8FAFC] border border-[#E2E7EE] text-xs">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-[#0B2545] uppercase tracking-wider flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-[#0A7469]" />
-                    Datos Extraídos del XML UBL 2.1
-                  </span>
-                  <span className="text-[#176B3F] font-semibold flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Sintaxis UBL conforme
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-[#0B2545]">
-                  <div>
-                    <span className="text-[#5B6B7F] block text-[10px] uppercase">Serie - Número:</span>
-                    <strong className="text-sm">{parsedPreview.seriesNumber}</strong>
-                  </div>
-                  <div>
-                    <span className="text-[#5B6B7F] block text-[10px] uppercase">Subtotal (Neto):</span>
-                    <span className="font-semibold">
-                      {parsedPreview.currency} {parsedPreview.subtotal.toFixed(2)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[#5B6B7F] block text-[10px] uppercase">IGV (18%):</span>
-                    <span className="font-semibold">
-                      {parsedPreview.currency} {parsedPreview.tax.toFixed(2)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[#5B6B7F] block text-[10px] uppercase">Total Comprobante:</span>
-                    <strong className="text-[#0A7469] text-sm">
-                      {parsedPreview.currency} {parsedPreview.total.toFixed(2)}
-                    </strong>
-                  </div>
-                </div>
-              </div>
-            )}
+            <button
+              type="button"
+              disabled={poStatus?.order_type === 'BIEN'}
+              onClick={() => {
+                setDocTypeToUpload('02');
+                setSubmitError(null);
+              }}
+              className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                docTypeToUpload === '02'
+                  ? 'bg-white text-indigo-700 shadow-sm border border-indigo-200'
+                  : poStatus?.order_type === 'BIEN'
+                  ? 'opacity-40 cursor-not-allowed text-[#5B6B7F]'
+                  : 'text-[#5B6B7F] hover:text-[#0B2545]'
+              }`}
+              title={
+                poStatus?.order_type === 'BIEN'
+                  ? 'Los RHE aplican exclusivamente a locaciones de servicios independientes'
+                  : 'Emitido por personas naturales en SUNAT SOL (4ta Categoría)'
+              }
+            >
+              <FileUp className="w-4 h-4 text-indigo-600" />
+              <span>Recibo por Honorarios (RHE - 02)</span>
+              <span className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                4ta Categoría
+              </span>
+            </button>
           </div>
 
-          {/* 2. Guía de Remisión Electrónica (GRE) - Condicional para Bienes */}
-          {poStatus?.order_type === 'BIEN' ? (
-            <div className="p-5 rounded-2xl bg-cyan-50/60 border border-cyan-200 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-cyan-900 flex items-center gap-2">
-                  <Truck className="w-4 h-4 text-cyan-600" />
-                  2. Guía de Remisión Electrónica - Remitente (Obligatorio para Bienes)
+          {/* Conditional View by Document Type */}
+          {docTypeToUpload === '02' ? (
+            /* ─────────────────────────────────────────────────────────── */
+            /* RECIBO POR HONORARIOS ELECTRÓNICO (SUNAT TIPO 02)           */
+            /* ─────────────────────────────────────────────────────────── */
+            <div className="space-y-6 animate-fadeIn">
+              {/* 1. PDF de RHE emitido por SUNAT SOL */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-[#0B2545] flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-indigo-600" />
+                  1. Representación Oficial PDF del Recibo por Honorarios (SUNAT SOL)
                 </h3>
-                <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-cyan-100 text-cyan-800 border border-cyan-200">
-                  Requerido por SUNAT
-                </span>
-              </div>
-              <p className="text-xs text-[#5B6B7F]">
-                Al tratarse de una orden de compra de bienes, se valida la consistencia física y correspondencia entre la Factura y la GRE.
-              </p>
 
-              {/* Pill de auto-detección desde la Factura Electrónica */}
-              {feReferencedGre && (
-                <div className="flex items-center gap-2.5 p-3 rounded-xl bg-teal-50 border border-teal-200 text-teal-900 text-xs">
-                  <ShieldCheck className="w-4 h-4 text-teal-600 flex-shrink-0" />
-                  <div>
-                    <span className="font-bold">GRE Detectada Automáticamente:</span>{' '}
-                    <span>Se completó la serie y número desde la referencia UBL 2.1 de la factura: </span>
-                    <strong className="underline decoration-teal-500 font-mono text-teal-800">{feReferencedGre.raw}</strong>
-                  </div>
-                </div>
-              )}
-
-              {/* Mensaje de validación de correspondencia GRE vs FE */}
-              {greValidation && (
-                <div
-                  className={`flex items-start gap-2.5 p-3 rounded-xl border text-xs ${
-                    greValidation.type === 'success'
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                      : greValidation.type === 'error'
-                      ? 'bg-rose-50 border-rose-200 text-rose-900'
-                      : 'bg-amber-50 border-amber-200 text-amber-900'
-                  }`}
-                >
-                  {greValidation.type === 'success' ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                  ) : (
-                    <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
-                  )}
-                  <div className="flex-1">
-                    <span className="font-bold block">
-                      {greValidation.type === 'success'
-                        ? 'Correspondencia GRE - FE Verificada'
-                        : greValidation.type === 'error'
-                        ? 'Inconsistencia Detectada en GRE'
-                        : 'Atención: Modificación Manual de GRE'}
-                    </span>
-                    <p className="mt-0.5">{greValidation.message}</p>
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-[#0B2545] mb-1">
-                    Serie GRE (ej. T001)
-                  </label>
-                  <input
-                    type="text"
-                    value={greSeries}
-                    onChange={(e) => {
-                      const val = e.target.value.toUpperCase();
-                      setGreSeries(val);
-                      if (feReferencedGre && `${val}-${greNumber}`.toUpperCase() !== feReferencedGre.raw.toUpperCase()) {
-                        setGreValidation({
-                          isValid: false,
-                          type: 'warning',
-                          message: `Atención: La numeración ingresada (${val}-${greNumber}) no coincide con la Guía referenciada en la Factura Electrónica (${feReferencedGre.raw}).`,
-                        });
-                      } else {
-                        setGreValidation(null);
-                      }
-                    }}
-                    placeholder="T001"
-                    className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono text-xs uppercase"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-[#0B2545] mb-1">
-                    Número correlativo GRE (ej. 00004521)
-                  </label>
-                  <input
-                    type="text"
-                    value={greNumber}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setGreNumber(val);
-                      if (feReferencedGre && `${greSeries}-${val}`.toUpperCase() !== feReferencedGre.raw.toUpperCase()) {
-                        setGreValidation({
-                          isValid: false,
-                          type: 'warning',
-                          message: `Atención: La numeración ingresada (${greSeries}-${val}) no coincide con la Guía referenciada en la Factura Electrónica (${feReferencedGre.raw}).`,
-                        });
-                      } else {
-                        setGreValidation(null);
-                      }
-                    }}
-                    placeholder="00004521"
-                    className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono text-xs"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <div>
+                <div className="p-6 rounded-2xl border border-dashed border-indigo-300 bg-indigo-50/30 flex flex-col items-center justify-center text-center">
+                  <FileText className="w-10 h-10 text-indigo-600 mb-2" />
+                  <span className="text-xs font-bold text-[#0B2545] mb-1">
+                    Archivo PDF del RHE (Obligatorio)
+                  </span>
+                  <span className="text-[11px] text-[#5B6B7F] mb-3 max-w-md">
+                    {rheFile ? (
+                      <span className="font-semibold text-indigo-900">{rheFile.name} ({(rheFile.size / 1024).toFixed(1)} KB)</span>
+                    ) : (
+                      'Descargue el PDF generado en el portal SUNAT Operaciones en Línea (SOL) correspondiente a este servicio.'
+                    )}
+                  </span>
                   <input
                     type="file"
-                    ref={greXmlRef}
-                    accept=".xml"
-                    onChange={handleGreXMLFileChange}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => greXmlRef.current?.click()}
-                    className="w-full py-2 px-3 rounded-lg bg-white hover:bg-cyan-50 text-cyan-800 border border-cyan-300 text-xs font-semibold flex items-center justify-center gap-2"
-                  >
-                    <FileUp className="w-3.5 h-3.5" />
-                    <span>{greXmlFile ? `XML: ${greXmlFile.name}` : 'Adjuntar GRE XML'}</span>
-                  </button>
-                </div>
-                <div>
-                  <input
-                    type="file"
-                    ref={grePdfRef}
+                    ref={rheFileInputRef}
                     accept=".pdf"
-                    onChange={(e) => setGrePdfFile(e.target.files?.[0] || null)}
+                    onChange={(e) => setRheFile(e.target.files?.[0] || null)}
                     className="hidden"
                   />
                   <button
                     type="button"
-                    onClick={() => grePdfRef.current?.click()}
-                    className="w-full py-2 px-3 rounded-lg bg-white hover:bg-[#F3F5F8] text-[#5B6B7F] border border-[#E2E7EE] text-xs font-semibold flex items-center justify-center gap-2"
+                    onClick={() => rheFileInputRef.current?.click()}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-colors flex items-center gap-2"
                   >
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>{grePdfFile ? `PDF: ${grePdfFile.name}` : 'Adjuntar GRE PDF'}</span>
+                    <FileUp className="w-4 h-4" />
+                    {rheFile ? 'Cambiar PDF RHE' : 'Examinar y Adjuntar PDF'}
                   </button>
+                </div>
+              </div>
+
+              {/* 2. Datos del Comprobante RHE */}
+              <div className="p-5 rounded-2xl bg-[#F8FAFC] border border-[#E2E7EE] space-y-4">
+                <h3 className="text-xs font-bold text-[#0B2545] uppercase tracking-wider flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                  2. Datos Registrados en el Comprobante
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#0B2545] mb-1">
+                      Serie (SUNAT RHE)
+                    </label>
+                    <input
+                      type="text"
+                      value={rheSeries}
+                      onChange={(e) => setRheSeries(e.target.value.toUpperCase())}
+                      placeholder="E001"
+                      className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono text-xs uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#0B2545] mb-1">
+                      Número Correlativo *
+                    </label>
+                    <input
+                      type="text"
+                      value={rheNumber}
+                      onChange={(e) => setRheNumber(e.target.value.trim())}
+                      placeholder="ej. 142 o 00000142"
+                      className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#0B2545] mb-1">
+                      Fecha de Emisión *
+                    </label>
+                    <input
+                      type="date"
+                      value={rheIssueDate}
+                      onChange={(e) => setRheIssueDate(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545] text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#0B2545] mb-1">
+                      Total Honorarios ({poStatus?.currency === 'USD' ? 'USD $' : 'PEN S/'}) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={rheTotalAmount}
+                      onChange={(e) => setRheTotalAmount(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545] font-semibold text-xs"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-[#0B2545] mb-1">
+                      Descripción del Servicio Prestado
+                    </label>
+                    <input
+                      type="text"
+                      value={rheServiceDescription}
+                      onChange={(e) => setRheServiceDescription(e.target.value)}
+                      placeholder="Ej. Asesoría legal/contable, desarrollo de software, etc."
+                      className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545] text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Retención de Impuesto a la Renta de 4ta Categoría */}
+              <div className="p-5 rounded-2xl bg-amber-50/50 border border-amber-200 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                    <h3 className="text-sm font-bold text-amber-950">
+                      3. Retención de Renta de 4ta Categoría (SUNAT)
+                    </h3>
+                  </div>
+                  <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${
+                    rheHasSuspension
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                      : numericRheTotal > 1500
+                      ? 'bg-amber-100 text-amber-900 border-amber-300'
+                      : 'bg-blue-50 text-blue-800 border-blue-200'
+                  }`}>
+                    {rheHasSuspension
+                      ? 'Suspensión 0.00% (Form. 1609)'
+                      : numericRheTotal > 1500
+                      ? 'Retención 8.00% Aplicable'
+                      : 'Inafecto (≤ S/ 1,500)'}
+                  </span>
+                </div>
+
+                <p className="text-xs text-amber-900/90 leading-relaxed">
+                  Conforme a la normativa SUNAT, los recibos por honorarios mayores a <strong>S/ 1,500.00</strong> están sujetos a la retención del <strong>8.00%</strong> de Impuesto a la Renta de 4ta Categoría, a menos que el prestador cuente con Constancia de Suspensión de Retenciones vigente (Formulario Virtual 1609).
+                </p>
+
+                {/* Switch de Suspensión Form. 1609 */}
+                <div className="p-4 rounded-xl bg-white border border-amber-200/80 shadow-sm space-y-3">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={rheHasSuspension}
+                      onChange={(e) => setRheHasSuspension(e.target.checked)}
+                      className="w-4 h-4 mt-0.5 rounded border-amber-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-[#0B2545] block">
+                        Cuento con Constancia de Suspensión de Retenciones (Formulario Virtual 1609)
+                      </span>
+                      <span className="text-[11px] text-[#5B6B7F]">
+                        Marque esta casilla si tramitó su constancia en SUNAT SOL y el cliente no debe retener el 8%.
+                      </span>
+                    </div>
+                  </label>
+
+                  {rheHasSuspension && (
+                    <div className="pt-3 border-t border-[#E2E7EE] grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fadeIn">
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0B2545] mb-1">
+                          N° Formulario 1609 de SUNAT *
+                        </label>
+                        <input
+                          type="text"
+                          value={rheSuspensionFormNumber}
+                          onChange={(e) => setRheSuspensionFormNumber(e.target.value)}
+                          placeholder="Ej. 2026-0091823"
+                          className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0B2545] mb-1">
+                          Constancia de Suspensión en PDF
+                        </label>
+                        <input
+                          type="file"
+                          ref={rheSuspensionInputRef}
+                          accept=".pdf"
+                          onChange={(e) => setRheSuspensionFile(e.target.files?.[0] || null)}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => rheSuspensionInputRef.current?.click()}
+                          className="w-full py-2 px-3 rounded-lg bg-[#F8FAFC] hover:bg-[#F3F5F8] text-[#5B6B7F] border border-[#E2E7EE] text-xs font-semibold flex items-center justify-center gap-2"
+                        >
+                          <FileUp className="w-3.5 h-3.5" />
+                          <span className="truncate">{rheSuspensionFile ? rheSuspensionFile.name : 'Adjuntar Form. 1609 (PDF)'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Desglose de Cálculo Financiero en Vivo */}
+                <div className="p-4 rounded-xl bg-white border border-[#E2E7EE] shadow-sm">
+                  <div className="text-xs font-bold text-[#0B2545] mb-3 uppercase tracking-wider">
+                    Liquidación de Pago del Recibo por Honorarios
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E2E7EE]">
+                      <span className="text-[10px] text-[#5B6B7F] block uppercase">Total Honorarios</span>
+                      <strong className="text-sm text-[#0B2545]">
+                        {poStatus?.currency === 'USD' ? '$' : 'S/'} {numericRheTotal.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </strong>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-amber-50/60 border border-amber-200">
+                      <span className="text-[10px] text-amber-800 block uppercase">
+                        Retención ({rheRetentionRate}%)
+                      </span>
+                      <strong className="text-sm text-amber-900">
+                        - {poStatus?.currency === 'USD' ? '$' : 'S/'} {rheRetentionAmount.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </strong>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-300">
+                      <span className="text-[10px] text-emerald-800 block uppercase font-bold">Neto a Percibir</span>
+                      <strong className="text-sm text-emerald-700">
+                        {poStatus?.currency === 'USD' ? '$' : 'S/'} {rheNetPayableAmount.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </strong>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="p-4 rounded-xl bg-[#F8FAFC] border border-[#E2E7EE] text-xs text-[#5B6B7F] flex items-center gap-2.5">
-              <Info className="w-4 h-4 text-[#0A7469] flex-shrink-0" />
-              <span>
-                <strong>Orden de Servicio:</strong> No requiere Guía de Remisión Electrónica (GRE). Se valida contra la Conformidad de Servicio (HES) previamente aprobada.
-              </span>
-            </div>
-          )}
+            /* ─────────────────────────────────────────────────────────── */
+            /* FACTURA ELECTRÓNICA UBL 2.1 (SUNAT TIPO 01)                */
+            /* ─────────────────────────────────────────────────────────── */
+            <>
+              {/* 1. Factura Electrónica (XML y PDF) */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-[#0B2545] flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#0A7469]" />
+                  1. Comprobante de Pago Electrónico (XML y PDF)
+                </h3>
 
-          {/* 3. Cesión Factoring Externo */}
-          <div className="p-5 rounded-2xl bg-[#F8FAFC] border border-[#E2E7EE] space-y-4">
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isFactored}
-                  onChange={(e) => setIsFactored(e.target.checked)}
-                  className="w-4 h-4 rounded border-[#E2E7EE] text-[#0A7469] focus:ring-[#0A7469] cursor-pointer"
-                />
-                <span className="text-sm font-bold text-[#0B2545]">
-                  ¿Esta factura ha sido negociada con alguna empresa de Factoring?
-                </span>
-              </label>
-              {isFactored && (
-                <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200">
-                  Cesión de Derechos
-                </span>
-              )}
-            </div>
-
-            {isFactored && (
-              <div className="pt-3 border-t border-[#E2E7EE] space-y-4 text-xs animate-fadeIn">
-                <p className="text-[#5B6B7F]">
-                  Ingresa los datos de la entidad cesionaria y adjunta la carta notarial o electrónica de cesión de derechos para que el cliente programe el pago al adquirente financiero.
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-[#0B2545] mb-1">
-                      Nombre de la Empresa de Factoring
-                    </label>
-                    <input
-                      type="text"
-                      value={factoringEntityName}
-                      onChange={(e) => setFactoringEntityName(e.target.value)}
-                      placeholder="Ej. InnovaFactoring S.A., Facturedo, BanBif, etc."
-                      className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545] text-xs focus:ring-2 focus:ring-[#0A7469]"
-                    />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* XML File Upload */}
+                  <div className="p-5 rounded-xl border border-dashed border-[#0A7469]/40 bg-[#E8F4F2]/30 flex flex-col items-center justify-center text-center">
+                    <FileUp className="w-8 h-8 text-[#0A7469] mb-2" />
+                    <span className="text-xs font-bold text-[#0B2545] mb-1">Archivo XML UBL 2.1 (Obligatorio)</span>
+                    <span className="text-[11px] text-[#5B6B7F] mb-3">
+                      {xmlFile ? xmlFile.name : 'Formato .xml con firma digital'}
+                    </span>
+                    <div className="flex gap-2">
+                      <input
+                        type="file"
+                        ref={xmlInputRef}
+                        accept=".xml"
+                        onChange={handleXMLFileChange}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => xmlInputRef.current?.click()}
+                        className="px-3 py-1.5 rounded-lg bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-semibold"
+                      >
+                        {xmlFile ? 'Cambiar XML' : 'Examinar XML'}
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-[#0B2545] mb-1">
-                      Carta de Cesión de Derechos (PDF Obligatorio)
-                    </label>
+
+                  {/* PDF File Upload */}
+                  <div className="p-5 rounded-xl border border-dashed border-[#E2E7EE] bg-[#F8FAFC] flex flex-col items-center justify-center text-center">
+                    <FileText className="w-8 h-8 text-[#5B6B7F] mb-2" />
+                    <span className="text-xs font-bold text-[#0B2545] mb-1">Representación Impresa PDF (Recomendado)</span>
+                    <span className="text-[11px] text-[#5B6B7F] mb-3">
+                      {pdfFile ? pdfFile.name : 'Formato .pdf legible'}
+                    </span>
                     <input
                       type="file"
-                      ref={factoringLetterRef}
+                      ref={pdfInputRef}
                       accept=".pdf"
-                      onChange={(e) => setFactoringLetterFile(e.target.files?.[0] || null)}
+                      onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
                       className="hidden"
                     />
                     <button
                       type="button"
-                      onClick={() => factoringLetterRef.current?.click()}
-                      className="w-full py-2 px-3 rounded-lg bg-white hover:bg-purple-50 text-purple-800 border border-purple-300 text-xs font-semibold flex items-center justify-center gap-2"
+                      onClick={() => pdfInputRef.current?.click()}
+                      className="px-3 py-1.5 rounded-lg bg-white hover:bg-[#F3F5F8] text-[#5B6B7F] text-xs font-semibold border border-[#E2E7EE]"
                     >
-                      <FileUp className="w-3.5 h-3.5" />
-                      <span>{factoringLetterFile ? factoringLetterFile.name : 'Subir Carta de Cesión (PDF)'}</span>
+                      {pdfFile ? 'Cambiar PDF' : 'Examinar PDF'}
                     </button>
                   </div>
                 </div>
+
+                {/* XML Parsed Data Preview Card */}
+                {parsedPreview && (
+                  <div className="p-4 rounded-xl bg-[#F8FAFC] border border-[#E2E7EE] text-xs">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-[#0B2545] uppercase tracking-wider flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-[#0A7469]" />
+                        Datos Extraídos del XML UBL 2.1
+                      </span>
+                      <span className="text-[#176B3F] font-semibold flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Sintaxis UBL conforme
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-[#0B2545]">
+                      <div>
+                        <span className="text-[#5B6B7F] block text-[10px] uppercase">Serie - Número:</span>
+                        <strong className="text-sm">{parsedPreview.seriesNumber}</strong>
+                      </div>
+                      <div>
+                        <span className="text-[#5B6B7F] block text-[10px] uppercase">Subtotal (Neto):</span>
+                        <span className="font-semibold">
+                          {parsedPreview.currency} {parsedPreview.subtotal.toFixed(2)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[#5B6B7F] block text-[10px] uppercase">IGV (18%):</span>
+                        <span className="font-semibold">
+                          {parsedPreview.currency} {parsedPreview.tax.toFixed(2)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[#5B6B7F] block text-[10px] uppercase">Total Comprobante:</span>
+                        <strong className="text-[#0A7469] text-sm">
+                          {parsedPreview.currency} {parsedPreview.total.toFixed(2)}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+
+              {/* 2. Guía de Remisión Electrónica (GRE) - Condicional para Bienes */}
+              {poStatus?.order_type === 'BIEN' ? (
+                <div className="p-5 rounded-2xl bg-cyan-50/60 border border-cyan-200 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-cyan-900 flex items-center gap-2">
+                      <Truck className="w-4 h-4 text-cyan-600" />
+                      2. Guía de Remisión Electrónica - Remitente (Obligatorio para Bienes)
+                    </h3>
+                    <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-cyan-100 text-cyan-800 border border-cyan-200">
+                      Requerido por SUNAT
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#5B6B7F]">
+                    Al tratarse de una orden de compra de bienes, se valida la consistencia física y correspondencia entre la Factura y la GRE.
+                  </p>
+
+                  {/* Pill de auto-detección desde la Factura Electrónica */}
+                  {feReferencedGre && (
+                    <div className="flex items-center gap-2.5 p-3 rounded-xl bg-teal-50 border border-teal-200 text-teal-900 text-xs">
+                      <ShieldCheck className="w-4 h-4 text-teal-600 flex-shrink-0" />
+                      <div>
+                        <span className="font-bold">GRE Detectada Automáticamente:</span>{' '}
+                        <span>Se completó la serie y número desde la referencia UBL 2.1 de la factura: </span>
+                        <strong className="underline decoration-teal-500 font-mono text-teal-800">{feReferencedGre.raw}</strong>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Mensaje de validación de correspondencia GRE vs FE */}
+                  {greValidation && (
+                    <div
+                      className={`flex items-start gap-2.5 p-3 rounded-xl border text-xs ${
+                        greValidation.type === 'success'
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                          : greValidation.type === 'error'
+                          ? 'bg-rose-50 border-rose-200 text-rose-900'
+                          : 'bg-amber-50 border-amber-200 text-amber-900'
+                      }`}
+                    >
+                      {greValidation.type === 'success' ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                      )}
+                      <div className="flex-1">
+                        <span className="font-bold block">
+                          {greValidation.type === 'success'
+                            ? 'Correspondencia GRE - FE Verificada'
+                            : greValidation.type === 'error'
+                            ? 'Inconsistencia Detectada en GRE'
+                            : 'Atención: Modificación Manual de GRE'}
+                        </span>
+                        <p className="mt-0.5">{greValidation.message}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-[#0B2545] mb-1">
+                        Serie GRE (ej. T001)
+                      </label>
+                      <input
+                        type="text"
+                        value={greSeries}
+                        onChange={(e) => {
+                          const val = e.target.value.toUpperCase();
+                          setGreSeries(val);
+                          if (feReferencedGre && `${val}-${greNumber}`.toUpperCase() !== feReferencedGre.raw.toUpperCase()) {
+                            setGreValidation({
+                              isValid: false,
+                              type: 'warning',
+                              message: `Atención: La numeración ingresada (${val}-${greNumber}) no coincide con la Guía referenciada en la Factura Electrónica (${feReferencedGre.raw}).`,
+                            });
+                          } else {
+                            setGreValidation(null);
+                          }
+                        }}
+                        placeholder="T001"
+                        className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono text-xs uppercase"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-[#0B2545] mb-1">
+                        Número correlativo GRE (ej. 00004521)
+                      </label>
+                      <input
+                        type="text"
+                        value={greNumber}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setGreNumber(val);
+                          if (feReferencedGre && `${greSeries}-${val}`.toUpperCase() !== feReferencedGre.raw.toUpperCase()) {
+                            setGreValidation({
+                              isValid: false,
+                              type: 'warning',
+                              message: `Atención: La numeración ingresada (${greSeries}-${val}) no coincide con la Guía referenciada en la Factura Electrónica (${feReferencedGre.raw}).`,
+                            });
+                          } else {
+                            setGreValidation(null);
+                          }
+                        }}
+                        placeholder="00004521"
+                        className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <input
+                        type="file"
+                        ref={greXmlRef}
+                        accept=".xml"
+                        onChange={handleGreXMLFileChange}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => greXmlRef.current?.click()}
+                        className="w-full py-2 px-3 rounded-lg bg-white hover:bg-cyan-50 text-cyan-800 border border-cyan-300 text-xs font-semibold flex items-center justify-center gap-2"
+                      >
+                        <FileUp className="w-3.5 h-3.5" />
+                        <span>{greXmlFile ? `XML: ${greXmlFile.name}` : 'Adjuntar GRE XML'}</span>
+                      </button>
+                    </div>
+                    <div>
+                      <input
+                        type="file"
+                        ref={grePdfRef}
+                        accept=".pdf"
+                        onChange={(e) => setGrePdfFile(e.target.files?.[0] || null)}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => grePdfRef.current?.click()}
+                        className="w-full py-2 px-3 rounded-lg bg-white hover:bg-[#F3F5F8] text-[#5B6B7F] border border-[#E2E7EE] text-xs font-semibold flex items-center justify-center gap-2"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>{grePdfFile ? `PDF: ${grePdfFile.name}` : 'Adjuntar GRE PDF'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-[#F8FAFC] border border-[#E2E7EE] text-xs text-[#5B6B7F] flex items-center gap-2.5">
+                  <Info className="w-4 h-4 text-[#0A7469] flex-shrink-0" />
+                  <span>
+                    <strong>Orden de Servicio:</strong> No requiere Guía de Remisión Electrónica (GRE). Se valida contra la Conformidad de Servicio (HES) previamente aprobada.
+                  </span>
+                </div>
+              )}
+
+              {/* 3. Cesión Factoring Externo */}
+              <div className="p-5 rounded-2xl bg-[#F8FAFC] border border-[#E2E7EE] space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isFactored}
+                      onChange={(e) => setIsFactored(e.target.checked)}
+                      className="w-4 h-4 rounded border-[#E2E7EE] text-[#0A7469] focus:ring-[#0A7469] cursor-pointer"
+                    />
+                    <span className="text-sm font-bold text-[#0B2545]">
+                      ¿Esta factura ha sido negociada con alguna empresa de Factoring?
+                    </span>
+                  </label>
+                  {isFactored && (
+                    <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200">
+                      Cesión de Derechos
+                    </span>
+                  )}
+                </div>
+
+                {isFactored && (
+                  <div className="pt-3 border-t border-[#E2E7EE] space-y-4 text-xs animate-fadeIn">
+                    <p className="text-[#5B6B7F]">
+                      Ingresa los datos de la entidad cesionaria y adjunta la carta notarial o electrónica de cesión de derechos para que el cliente programe el pago al adquirente financiero.
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0B2545] mb-1">
+                          Nombre de la Empresa de Factoring
+                        </label>
+                        <input
+                          type="text"
+                          value={factoringEntityName}
+                          onChange={(e) => setFactoringEntityName(e.target.value)}
+                          placeholder="Ej. InnovaFactoring S.A., Facturedo, BanBif, etc."
+                          className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545] text-xs focus:ring-2 focus:ring-[#0A7469]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0B2545] mb-1">
+                          Carta de Cesión de Derechos (PDF Obligatorio)
+                        </label>
+                        <input
+                          type="file"
+                          ref={factoringLetterRef}
+                          accept=".pdf"
+                          onChange={(e) => setFactoringLetterFile(e.target.files?.[0] || null)}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => factoringLetterRef.current?.click()}
+                          className="w-full py-2 px-3 rounded-lg bg-white hover:bg-purple-50 text-purple-800 border border-purple-300 text-xs font-semibold flex items-center justify-center gap-2"
+                        >
+                          <FileUp className="w-3.5 h-3.5" />
+                          <span>{factoringLetterFile ? factoringLetterFile.name : 'Subir Carta de Cesión (PDF)'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           {/* Submission Error Banner */}
           {submitError && (
@@ -1221,7 +1590,12 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
             </button>
             <button
               type="button"
-              disabled={isSubmitting || !xmlFile}
+              disabled={
+                isSubmitting ||
+                (docTypeToUpload === '01'
+                  ? !xmlFile
+                  : (!rheFile || !rheNumber.trim() || numericRheTotal <= 0))
+              }
               onClick={handleSubmit}
               className="flex items-center gap-2 px-7 py-3 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-bold text-sm shadow-md shadow-[#0A7469]/20 transition-all hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
@@ -1233,7 +1607,9 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
               ) : (
                 <>
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Ingresar Factura al Sistema</span>
+                  <span>
+                    {docTypeToUpload === '02' ? 'Ingresar Recibo por Honorarios' : 'Ingresar Factura al Sistema'}
+                  </span>
                 </>
               )}
             </button>
@@ -1250,27 +1626,64 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
 
           <div className="max-w-md mx-auto">
             <h2 className="text-2xl font-bold text-[#0B2545] tracking-tight">
-              ¡Factura Recibida Exitosamente!
+              {docTypeToUpload === '02' ? '¡Recibo por Honorarios Registrado Exitosamente!' : '¡Factura Recibida Exitosamente!'}
             </h2>
             <p className="text-sm text-[#5B6B7F] mt-2">
-              El comprobante <strong>{parsedPreview?.seriesNumber || 'F001-0004522'}</strong> fue recibido, validado ante SUNAT y enlazado con la orden <strong>{poStatus?.po_number}</strong>.
+              El comprobante <strong>{docTypeToUpload === '02' ? `${rheSeries}-${rheNumber}` : (parsedPreview?.seriesNumber || 'F001-0004522')}</strong> fue recibido, validado y enlazado con la orden <strong>{poStatus?.po_number}</strong>.
             </p>
           </div>
 
           <div className="max-w-md mx-auto p-4 rounded-xl bg-[#F8FAFC] border border-[#E2E7EE] text-xs text-left space-y-2 text-[#0B2545]">
             <div className="flex justify-between">
-              <span className="text-[#5B6B7F]">Estado Inicial:</span>
-              <span className="font-semibold text-[#3A5A9B]">Enviado / En revisión</span>
+              <span className="text-[#5B6B7F]">Tipo Comprobante:</span>
+              <span className="font-semibold text-[#0B2545]">
+                {docTypeToUpload === '02' ? 'Recibo por Honorarios Electrónico (Tipo 02)' : 'Factura Electrónica (Tipo 01)'}
+              </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[#5B6B7F]">Hash SHA-256 UBL:</span>
-              <span className="font-mono text-[11px] text-[#5B6B7F]">Verificado</span>
-            </div>
-            {isFactored && (
-              <div className="flex justify-between">
-                <span className="text-[#5B6B7F]">Cesión Factoring:</span>
-                <span className="font-semibold text-purple-700">{factoringEntityName}</span>
-              </div>
+            {docTypeToUpload === '02' ? (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-[#5B6B7F]">Total Honorarios Bruto:</span>
+                  <span className="font-semibold">
+                    {poStatus?.currency === 'USD' ? '$' : 'S/'} {numericRheTotal.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#5B6B7F]">Retención 4ta Categoría ({rheRetentionRate}%):</span>
+                  <span className="font-semibold text-amber-700">
+                    - {poStatus?.currency === 'USD' ? '$' : 'S/'} {rheRetentionAmount.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between pt-1 border-t border-[#E2E7EE]">
+                  <span className="text-[#5B6B7F] font-bold">Neto a Pagar:</span>
+                  <strong className="text-emerald-700 text-sm">
+                    {poStatus?.currency === 'USD' ? '$' : 'S/'} {rheNetPayableAmount.toFixed(2)}
+                  </strong>
+                </div>
+                {rheHasSuspension && (
+                  <div className="flex justify-between">
+                    <span className="text-[#5B6B7F]">Formulario 1609:</span>
+                    <span className="font-mono text-emerald-700">{rheSuspensionFormNumber}</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-[#5B6B7F]">Estado Inicial:</span>
+                  <span className="font-semibold text-[#3A5A9B]">Enviado / En revisión</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#5B6B7F]">Hash SHA-256 UBL:</span>
+                  <span className="font-mono text-[11px] text-[#5B6B7F]">Verificado</span>
+                </div>
+                {isFactored && (
+                  <div className="flex justify-between">
+                    <span className="text-[#5B6B7F]">Cesión Factoring:</span>
+                    <span className="font-semibold text-purple-700">{factoringEntityName}</span>
+                  </div>
+                )}
+              </>
             )}
             <div className="flex justify-between">
               <span className="text-[#5B6B7F]">Programación de Pago:</span>
@@ -1294,10 +1707,17 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
                 setGreXmlFile(null);
                 setGrePdfFile(null);
                 setIsFactored(false);
+                setRheFile(null);
+                setRheNumber('');
+                setRheTotalAmount('');
+                setRheServiceDescription('');
+                setRheHasSuspension(false);
+                setRheSuspensionFormNumber('');
+                setRheSuspensionFile(null);
               }}
               className="px-5 py-2.5 rounded-xl bg-[#F3F5F8] hover:bg-[#E2E7EE] text-[#0B2545] font-semibold text-sm border border-[#E2E7EE] transition-colors"
             >
-              Cargar otra factura
+              Cargar otro comprobante
             </button>
           </div>
         </div>

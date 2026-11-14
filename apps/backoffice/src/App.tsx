@@ -462,8 +462,12 @@ export default function App() {
                                 {inv.series}-{inv.number}
                               </span>
                               <div className="flex items-center gap-1.5 mt-0.5">
-                                <span className="text-[10px] text-[#5B6B7F]">
-                                  {inv.document_type === '01' ? 'Factura' : inv.document_type}
+                                <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border ${
+                                  inv.document_type === '02'
+                                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                    : 'bg-[#F3F5F8] text-[#5B6B7F] border-[#E2E7EE]'
+                                }`}>
+                                  {inv.document_type === '02' ? 'RHE' : (inv.document_type === '01' ? 'Factura' : inv.document_type)}
                                 </span>
                                 {inv.has_gre && (
                                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-50 text-cyan-700 border border-cyan-200">
@@ -492,8 +496,17 @@ export default function App() {
                             </td>
 
                             <td className="py-4 px-4 font-bold text-[#0B2545] text-sm">
-                              {inv.currency === 'PEN' ? 'S/' : '$'}{' '}
-                              {inv.total_amount.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                              <div>
+                                {inv.currency === 'PEN' ? 'S/' : '$'}{' '}
+                                {inv.total_amount.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                              </div>
+                              {inv.document_type === '02' && inv.retention_amount != null && inv.retention_amount > 0 && (
+                                <div className="text-[10px] font-normal text-amber-700 mt-0.5">
+                                  Neto: {inv.currency === 'PEN' ? 'S/' : '$'}{' '}
+                                  {(inv.net_payable_amount ?? (inv.total_amount - inv.retention_amount)).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                  {' '}(Ret. {inv.retention_rate || 8}%)
+                                </div>
+                              )}
                             </td>
 
                             <td className="py-4 px-4">
