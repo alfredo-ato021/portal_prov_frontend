@@ -9,6 +9,7 @@ import {
   X,
   ShieldCheck,
   AlertTriangle,
+  Pencil,
 } from 'lucide-react';
 import {
   FactumfluxClient,
@@ -47,6 +48,63 @@ export const ClientSuppliersView: React.FC<ClientSuppliersViewProps> = ({
     phone: '',
     payment_terms_days: 30,
   });
+
+  // Edit Supplier Modal State
+  const [editingSupplier, setEditingSupplier] = useState<TenantSupplierItem | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    legal_name: '',
+    commercial_name: '',
+    payment_terms_days: 30,
+    status: 'active',
+    contact_email: '',
+    phone: '',
+  });
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const handleOpenEditModal = (supplier: TenantSupplierItem) => {
+    setEditingSupplier(supplier);
+    setEditFormData({
+      legal_name: supplier.legal_name || '',
+      commercial_name: supplier.commercial_name || '',
+      payment_terms_days: supplier.payment_terms_days || 30,
+      status: supplier.status || 'active',
+      contact_email: '',
+      phone: '',
+    });
+  };
+
+  const handleUpdateSupplier = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSupplier) return;
+    setIsUpdating(true);
+    try {
+      const targetId = editingSupplier.id || editingSupplier.supplier_id || editingSupplier.ruc;
+      await client.updateTenantSupplier(targetId, {
+        legal_name: editFormData.legal_name,
+        commercial_name: editFormData.commercial_name,
+        payment_terms_days: Number(editFormData.payment_terms_days),
+        status: editFormData.status,
+        contact_email: editFormData.contact_email,
+        phone: editFormData.phone,
+      });
+
+      setSystemNotice({
+        title: 'Proveedor Actualizado',
+        message: `Los datos del proveedor ${editFormData.legal_name || editingSupplier.legal_name} se guardaron exitosamente.`,
+        type: 'success',
+      });
+      setEditingSupplier(null);
+      await loadSuppliers();
+    } catch (err: any) {
+      setSystemNotice({
+        title: 'Error al actualizar',
+        message: err.message || 'No se pudieron actualizar los datos del proveedor.',
+        type: 'danger',
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const handleLookupSunat = async (targetRuc?: string) => {
     const rucToQuery = (targetRuc || formData.ruc).trim();
@@ -350,14 +408,24 @@ export const ClientSuppliersView: React.FC<ClientSuppliersViewProps> = ({
                     </td>
 
                     <td className="py-4 px-4 text-right">
-                      <button
-                        onClick={() => copyOnboardingLink(s.ruc)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#E8F4F2] hover:bg-[#D5EBE7] text-[#0A7469] font-bold text-[11px] transition-colors"
-                        title="Copiar enlace de acceso / onboarding para el proveedor"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>Invitar / Onboarding</span>
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleOpenEditModal(s)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E2E7EE] hover:bg-slate-100 text-[#0B2545] font-bold text-[11px] transition-colors"
+                          title="Editar información del proveedor"
+                        >
+                          <Pencil className="w-3.5 h-3.5 text-[#5B6B7F]" />
+                          <span>Editar</span>
+                        </button>
+                        <button
+                          onClick={() => copyOnboardingLink(s.ruc)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#E8F4F2] hover:bg-[#D5EBE7] text-[#0A7469] font-bold text-[11px] transition-colors"
+                          title="Copiar enlace de acceso / onboarding para el proveedor"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Invitar / Onboarding</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -576,6 +644,141 @@ export const ClientSuppliersView: React.FC<ClientSuppliersViewProps> = ({
                   className="px-5 py-2.5 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-bold transition-all shadow-md shadow-[#0A7469]/20 disabled:opacity-50"
                 >
                   {isSubmitting ? 'Guardando...' : 'Guardar y Vincular Proveedor'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: EDITAR DATOS DEL PROVEEDOR ───────────────────────────────── */}
+      {editingSupplier && (
+        <div className="fixed inset-0 bg-[#0B2545]/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white border border-[#E2E7EE] rounded-2xl max-w-lg w-full p-6 md:p-8 space-y-5 shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-[#E2E7EE] pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-[#E8F4F2] text-[#0A7469]">
+                  <Pencil className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-[#0B2545] text-base">Editar Datos del Proveedor</h3>
+                  <p className="text-xs text-[#5B6B7F]">
+                    RUC: <strong className="font-mono text-[#0B2545]">{editingSupplier.ruc}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingSupplier(null)}
+                className="text-[#5B6B7F] hover:text-[#0B2545]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateSupplier} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-[#5B6B7F] font-semibold mb-1">
+                  Razón Social *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editFormData.legal_name}
+                  onChange={(e) => setEditFormData({ ...editFormData, legal_name: e.target.value })}
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-[#0B2545] font-semibold focus:outline-none focus:border-[#0A7469]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[#5B6B7F] font-semibold mb-1">
+                  Nombre Comercial (opcional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="ej. Nombre de marca o fantasía"
+                  value={editFormData.commercial_name}
+                  onChange={(e) => setEditFormData({ ...editFormData, commercial_name: e.target.value })}
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-[#0B2545] focus:outline-none focus:border-[#0A7469]"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[#5B6B7F] font-semibold mb-1">
+                    Plazo de Pago (Días Calendario) *
+                  </label>
+                  <select
+                    value={editFormData.payment_terms_days}
+                    onChange={(e) => setEditFormData({ ...editFormData, payment_terms_days: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-[#0B2545] font-semibold focus:outline-none focus:border-[#0A7469]"
+                  >
+                    <option value={7}>7 días calendario</option>
+                    <option value={15}>15 días calendario</option>
+                    <option value={30}>30 días calendario (Estándar)</option>
+                    <option value={45}>45 días calendario</option>
+                    <option value={60}>60 días calendario</option>
+                    <option value={90}>90 días calendario</option>
+                    <option value={120}>120 días calendario</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[#5B6B7F] font-semibold mb-1">
+                    Estado en el Portal *
+                  </label>
+                  <select
+                    value={editFormData.status}
+                    onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-[#0B2545] font-semibold focus:outline-none focus:border-[#0A7469]"
+                  >
+                    <option value="active">Activo (Habilitado)</option>
+                    <option value="inactive">Inactivo</option>
+                    <option value="suspended">Suspendido (Bloqueado)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[#5B6B7F] font-semibold mb-1">
+                    Correo de Notificaciones
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="contacto@empresa.com"
+                    value={editFormData.contact_email}
+                    onChange={(e) => setEditFormData({ ...editFormData, contact_email: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-[#0B2545] focus:outline-none focus:border-[#0A7469]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#5B6B7F] font-semibold mb-1">
+                    Teléfono / Celular
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="+51 999 888 777"
+                    value={editFormData.phone}
+                    onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-[#0B2545] focus:outline-none focus:border-[#0A7469]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#E2E7EE]">
+                <button
+                  type="button"
+                  onClick={() => setEditingSupplier(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#0B2545] font-semibold transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="px-5 py-2.5 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-bold transition-all shadow-md shadow-[#0A7469]/20 disabled:opacity-50"
+                >
+                  {isUpdating ? 'Actualizando...' : 'Guardar Cambios'}
                 </button>
               </div>
             </form>

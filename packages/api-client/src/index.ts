@@ -466,6 +466,15 @@ export interface RegisterSupplierRequest {
   payment_terms_days?: number;
 }
 
+export interface UpdateTenantSupplierRequest {
+  legal_name?: string;
+  commercial_name?: string;
+  payment_terms_days?: number;
+  status?: string;
+  contact_email?: string;
+  phone?: string;
+}
+
 export interface SunatRucInfo {
   ruc: string;
   legal_name: string;
@@ -1258,6 +1267,16 @@ export class FactumfluxClient {
   async registerSupplier(data: RegisterSupplierRequest): Promise<{ success: boolean; supplier_id: string; message: string }> {
     return this.fetch('/api/v1/backoffice/suppliers', {
       method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateTenantSupplier(
+    supplierId: string,
+    data: UpdateTenantSupplierRequest
+  ): Promise<{ success: boolean; message: string }> {
+    return this.fetch(`/api/v1/backoffice/suppliers/${encodeURIComponent(supplierId)}`, {
+      method: 'PUT',
       body: JSON.stringify(data),
     });
   }

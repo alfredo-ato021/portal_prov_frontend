@@ -8,7 +8,6 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  Shield,
   ShieldCheck,
   Users,
   Cpu,
@@ -31,7 +30,7 @@ interface ClientSidebarProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   onLogout: () => void;
-  onSwitchToSuperAdmin: () => void;
+  onSwitchToSuperAdmin?: () => void;
 }
 
 export const ClientSidebar: React.FC<ClientSidebarProps> = ({
@@ -41,7 +40,6 @@ export const ClientSidebar: React.FC<ClientSidebarProps> = ({
   isCollapsed,
   onToggleCollapse,
   onLogout,
-  onSwitchToSuperAdmin,
 }) => {
   const menuItems = [
     {
@@ -174,17 +172,8 @@ export const ClientSidebar: React.FC<ClientSidebarProps> = ({
         })}
       </nav>
 
-      {/* Footer / Isolated SuperAdmin Access & Logout */}
+      {/* Footer / Logout */}
       <div className="p-3 border-t border-[#1F3558] space-y-1">
-        <button
-          onClick={onSwitchToSuperAdmin}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold text-[#F2B134] hover:bg-[#F2B134]/10 transition-colors"
-          title={isCollapsed ? 'SuperAdmin SaaS' : undefined}
-        >
-          <Shield className="w-4 h-4 flex-shrink-0 text-[#F2B134]" />
-          {!isCollapsed && <span>Consola SuperAdmin</span>}
-        </button>
-
         <button
           onClick={onLogout}
           className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-[#9AA8BC] hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
