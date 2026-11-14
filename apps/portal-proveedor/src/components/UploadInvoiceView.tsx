@@ -141,9 +141,6 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
           : [],
     });
 
-    if (order.order_type === 'BIEN') {
-      setGreNumber('000' + Math.floor(1000 + Math.random() * 9000));
-    }
     setStep(2);
   };
 
@@ -169,11 +166,14 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
     issueDate: string;
   } | null>(null);
 
-  // Step 2 (Conditional Bienes): GRE Files
-  const [greSeries, setGreSeries] = useState('T001');
+  // Step 2 (Conditional Bienes): GRE Files & Auto-detection
+  const [greSeries, setGreSeries] = useState('');
   const [greNumber, setGreNumber] = useState('');
   const [greXmlFile, setGreXmlFile] = useState<File | null>(null);
   const [grePdfFile, setGrePdfFile] = useState<File | null>(null);
+  const [feReferencedGre, setFeReferencedGre] = useState<{ series: string; number: string; raw: string } | null>(null);
+  const [greValidation, setGreValidation] = useState<{ isValid: boolean; message: string; type: 'success' | 'warning' | 'error' } | null>(null);
+  const [feSuppInfo, setFeSuppInfo] = useState<{ supplierRuc: string; customerRuc: string } | null>(null);
 
   // Step 2: Factoring Externo
   const [isFactored, setIsFactored] = useState(false);
@@ -210,9 +210,6 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
     try {
       const result = await client.checkPOReceptionStatus(code);
       setPoStatus(result);
-      if (result.order_type === 'BIEN') {
-        setGreNumber('000' + Math.floor(1000 + Math.random() * 9000));
-      }
     } catch (err: any) {
       setPoError(err.message || 'Error al consultar la orden en el ERP.');
     } finally {
@@ -254,6 +251,64 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
         const dateElem = xmlDoc.getElementsByTagNameNS('*', 'IssueDate')[0];
         const issueDate = dateElem?.textContent || new Date().toISOString().split('T')[0];
 
+        // Extract Supplier and Customer RUCs from Invoice XML
+        const supplierParty = xmlDoc.getElementsByTagNameNS('*', 'AccountingSupplierParty')[0] || xmlDoc.getElementsByTagName('cac:AccountingSupplierParty')[0];
+        const sIdElem = supplierParty ? (supplierParty.getElementsByTagNameNS('*', 'ID')[0] || supplierParty.getElementsByTagName('cbc:ID')[0]) : null;
+        const sRuc = sIdElem?.textContent?.trim() || '';
+
+        const customerParty = xmlDoc.getElementsByTagNameNS('*', 'AccountingCustomerParty')[0] || xmlDoc.getElementsByTagName('cac:AccountingCustomerParty')[0];
+        const cIdElem = customerParty ? (customerParty.getElementsByTagNameNS('*', 'ID')[0] || customerParty.getElementsByTagName('cbc:ID')[0]) : null;
+        const cRuc = cIdElem?.textContent?.trim() || '';
+
+        const suppData = { supplierRuc: sRuc, customerRuc: cRuc };
+        setFeSuppInfo(suppData);
+
+        // Auto-extract Guía de Remisión (GRE) reference from UBL 2.1
+        let extractedGreId = '';
+        const despatchDocs = xmlDoc.getElementsByTagNameNS('*', 'DespatchDocumentReference');
+        for (let i = 0; i < despatchDocs.length; i++) {
+          const idNode = despatchDocs[i].getElementsByTagNameNS('*', 'ID')[0] || despatchDocs[i].getElementsByTagName('cbc:ID')[0];
+          if (idNode?.textContent?.trim()) {
+            extractedGreId = idNode.textContent.trim();
+            break;
+          }
+        }
+        if (!extractedGreId) {
+          const addDocs = xmlDoc.getElementsByTagNameNS('*', 'AdditionalDocumentReference');
+          for (let i = 0; i < addDocs.length; i++) {
+            const typeNode = addDocs[i].getElementsByTagNameNS('*', 'DocumentTypeCode')[0] || addDocs[i].getElementsByTagName('cbc:DocumentTypeCode')[0];
+            const typeCode = typeNode?.textContent?.trim();
+            if (typeCode === '09' || typeCode === '31') {
+              const idNode = addDocs[i].getElementsByTagNameNS('*', 'ID')[0] || addDocs[i].getElementsByTagName('cbc:ID')[0];
+              if (idNode?.textContent?.trim()) {
+                extractedGreId = idNode.textContent.trim();
+                break;
+              }
+            }
+          }
+        }
+
+        if (extractedGreId) {
+          const parts = extractedGreId.split('-');
+          if (parts.length === 2) {
+            const s = parts[0].trim().toUpperCase();
+            const n = parts[1].trim();
+            setGreSeries(s);
+            setGreNumber(n);
+            setFeReferencedGre({ series: s, number: n, raw: extractedGreId });
+            setGreValidation({
+              isValid: true,
+              type: 'success',
+              message: `Guía de Remisión ${extractedGreId} completada automáticamente desde el XML de la Factura (UBL 2.1).`,
+            });
+          } else {
+            setGreSeries(extractedGreId.toUpperCase());
+            setFeReferencedGre({ series: extractedGreId, number: '', raw: extractedGreId });
+          }
+        } else {
+          setFeReferencedGre(null);
+        }
+
         setParsedPreview({
           seriesNumber: seriesNum,
           subtotal,
@@ -276,6 +331,112 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
     reader.readAsText(file);
   };
 
+  const handleGreXMLFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.xml')) {
+      setSystemAlert({
+        type: 'warning',
+        title: 'Archivo no Válido',
+        message: 'Por favor seleccione un archivo XML válido de Guía de Remisión Electrónica (GRE).',
+      });
+      return;
+    }
+
+    setGreXmlFile(file);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      try {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(content, 'text/xml');
+
+        const idElem = xmlDoc.getElementsByTagNameNS('*', 'ID')[0] || xmlDoc.getElementsByTagName('cbc:ID')[0];
+        const greId = idElem?.textContent?.trim() || '';
+
+        // Extract GRE supplier RUC
+        const suppParty = xmlDoc.getElementsByTagNameNS('*', 'DespatchSupplierParty')[0] || xmlDoc.getElementsByTagName('cac:DespatchSupplierParty')[0];
+        let greSupplierRuc = '';
+        if (suppParty) {
+          const idTag = suppParty.getElementsByTagNameNS('*', 'ID')[0] || suppParty.getElementsByTagName('cbc:ID')[0];
+          greSupplierRuc = idTag?.textContent?.trim() || '';
+          if (!greSupplierRuc) {
+            const custAcc = suppParty.getElementsByTagNameNS('*', 'CustomerAssignedAccountID')[0] || suppParty.getElementsByTagName('cbc:CustomerAssignedAccountID')[0];
+            greSupplierRuc = custAcc?.textContent?.trim() || '';
+          }
+        }
+
+        // Extract GRE customer/recipient RUC
+        const custParty = xmlDoc.getElementsByTagNameNS('*', 'DeliveryCustomerParty')[0] || xmlDoc.getElementsByTagName('cac:DeliveryCustomerParty')[0];
+        let greCustomerRuc = '';
+        if (custParty) {
+          const idTag = custParty.getElementsByTagNameNS('*', 'ID')[0] || custParty.getElementsByTagName('cbc:ID')[0];
+          greCustomerRuc = idTag?.textContent?.trim() || '';
+          if (!greCustomerRuc) {
+            const custAcc = custParty.getElementsByTagNameNS('*', 'CustomerAssignedAccountID')[0] || custParty.getElementsByTagName('cbc:CustomerAssignedAccountID')[0];
+            greCustomerRuc = custAcc?.textContent?.trim() || '';
+          }
+        }
+
+        // Auto-fill inputs if not yet populated
+        if (greId) {
+          const parts = greId.split('-');
+          if (parts.length === 2) {
+            if (!greSeries || !greNumber) {
+              setGreSeries(parts[0].trim().toUpperCase());
+              setGreNumber(parts[1].trim());
+            }
+          }
+        }
+
+        // Validate correspondence with FE declared GRE
+        if (feReferencedGre && greId && !stringsMatch(feReferencedGre.raw, greId)) {
+          setGreValidation({
+            isValid: false,
+            type: 'error',
+            message: `Inconsistencia: La Guía adjunta (${greId}) no coincide con la GRE referenciada en la Factura Electrónica (${feReferencedGre.raw}).`,
+          });
+          return;
+        }
+
+        // Validate correspondence with FE Supplier RUC
+        if (feSuppInfo?.supplierRuc && greSupplierRuc && feSuppInfo.supplierRuc !== greSupplierRuc) {
+          setGreValidation({
+            isValid: false,
+            type: 'error',
+            message: `Inconsistencia: El RUC emisor de la GRE (${greSupplierRuc}) no coincide con el emisor de la Factura (${feSuppInfo.supplierRuc}).`,
+          });
+          return;
+        }
+
+        // Validate correspondence with FE Customer RUC
+        if (feSuppInfo?.customerRuc && greCustomerRuc && feSuppInfo.customerRuc !== greCustomerRuc) {
+          setGreValidation({
+            isValid: false,
+            type: 'error',
+            message: `Inconsistencia: El RUC destinatario de la GRE (${greCustomerRuc}) no coincide con el cliente de la Factura (${feSuppInfo.customerRuc}).`,
+          });
+          return;
+        }
+
+        setGreValidation({
+          isValid: true,
+          type: 'success',
+          message: `GRE ${greId || file.name} verificada: Coincide emisor, cliente y correspondencia con la Factura Electrónica.`,
+        });
+      } catch {
+        // Fallback if parsing fails
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const stringsMatch = (a: string, b: string) => {
+    return a.trim().toUpperCase() === b.trim().toUpperCase();
+  };
+
   const handleSubmit = async () => {
     if (!xmlFile) {
       setSubmitError('Debe adjuntar el archivo XML de la factura.');
@@ -285,6 +446,19 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
     if (poStatus?.order_type === 'BIEN' && (!greSeries || !greNumber)) {
       setSubmitError('Para órdenes de Bienes es obligatorio indicar la Serie y Número de la Guía de Remisión (GRE).');
       return;
+    }
+
+    // Validate correspondence before submitting
+    if (poStatus?.order_type === 'BIEN') {
+      const formGre = `${greSeries.trim()}-${greNumber.trim()}`.toUpperCase();
+      if (feReferencedGre && !stringsMatch(feReferencedGre.raw, formGre)) {
+        setSubmitError(`La Serie y Número de GRE ingresados (${formGre}) no coinciden con la Guía referenciada en el XML de la Factura (${feReferencedGre.raw}).`);
+        return;
+      }
+      if (greValidation && !greValidation.isValid) {
+        setSubmitError(greValidation.message);
+        return;
+      }
     }
 
     if (isFactored && !factoringEntityName) {
@@ -821,8 +995,49 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
                 </span>
               </div>
               <p className="text-xs text-[#5B6B7F]">
-                Al tratarse de una orden de compra de bienes, se valida la consistencia física entre la Factura y la GRE correspondiente.
+                Al tratarse de una orden de compra de bienes, se valida la consistencia física y correspondencia entre la Factura y la GRE.
               </p>
+
+              {/* Pill de auto-detección desde la Factura Electrónica */}
+              {feReferencedGre && (
+                <div className="flex items-center gap-2.5 p-3 rounded-xl bg-teal-50 border border-teal-200 text-teal-900 text-xs">
+                  <ShieldCheck className="w-4 h-4 text-teal-600 flex-shrink-0" />
+                  <div>
+                    <span className="font-bold">GRE Detectada Automáticamente:</span>{' '}
+                    <span>Se completó la serie y número desde la referencia UBL 2.1 de la factura: </span>
+                    <strong className="underline decoration-teal-500 font-mono text-teal-800">{feReferencedGre.raw}</strong>
+                  </div>
+                </div>
+              )}
+
+              {/* Mensaje de validación de correspondencia GRE vs FE */}
+              {greValidation && (
+                <div
+                  className={`flex items-start gap-2.5 p-3 rounded-xl border text-xs ${
+                    greValidation.type === 'success'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                      : greValidation.type === 'error'
+                      ? 'bg-rose-50 border-rose-200 text-rose-900'
+                      : 'bg-amber-50 border-amber-200 text-amber-900'
+                  }`}
+                >
+                  {greValidation.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                  )}
+                  <div className="flex-1">
+                    <span className="font-bold block">
+                      {greValidation.type === 'success'
+                        ? 'Correspondencia GRE - FE Verificada'
+                        : greValidation.type === 'error'
+                        ? 'Inconsistencia Detectada en GRE'
+                        : 'Atención: Modificación Manual de GRE'}
+                    </span>
+                    <p className="mt-0.5">{greValidation.message}</p>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -832,7 +1047,24 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
                   <input
                     type="text"
                     value={greSeries}
-                    onChange={(e) => setGreSeries(e.target.value.toUpperCase())}
+                    onChange={(e) => {
+                      const val = e.target.value.toUpperCase();
+                      setGreSeries(val);
+                      if (feReferencedGre && `${val}-${greNumber}`.toUpperCase() !== feReferencedGre.raw.toUpperCase()) {
+                        setGreValidation({
+                          isValid: false,
+                          type: 'warning',
+                          message: `Atención: La numeración ingresada (${val}-${greNumber}) no coincide con la Guía referenciada en la Factura Electrónica (${feReferencedGre.raw}).`,
+                        });
+                      } else if (feReferencedGre) {
+                        setGreValidation({
+                          isValid: true,
+                          type: 'success',
+                          message: `Guía de Remisión ${feReferencedGre.raw} validada y conforme con la Factura Electrónica.`,
+                        });
+                      }
+                    }}
+                    placeholder="T001"
                     className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono text-xs uppercase"
                   />
                 </div>
@@ -843,7 +1075,23 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
                   <input
                     type="text"
                     value={greNumber}
-                    onChange={(e) => setGreNumber(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setGreNumber(val);
+                      if (feReferencedGre && `${greSeries}-${val}`.toUpperCase() !== feReferencedGre.raw.toUpperCase()) {
+                        setGreValidation({
+                          isValid: false,
+                          type: 'warning',
+                          message: `Atención: La numeración ingresada (${greSeries}-${val}) no coincide con la Guía referenciada en la Factura Electrónica (${feReferencedGre.raw}).`,
+                        });
+                      } else if (feReferencedGre) {
+                        setGreValidation({
+                          isValid: true,
+                          type: 'success',
+                          message: `Guía de Remisión ${feReferencedGre.raw} validada y conforme con la Factura Electrónica.`,
+                        });
+                      }
+                    }}
                     placeholder="00004521"
                     className="w-full px-3 py-2 bg-white border border-[#E2E7EE] rounded-lg text-[#0B2545] font-mono text-xs"
                   />
@@ -856,7 +1104,7 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
                     type="file"
                     ref={greXmlRef}
                     accept=".xml"
-                    onChange={(e) => setGreXmlFile(e.target.files?.[0] || null)}
+                    onChange={handleGreXMLFileChange}
                     className="hidden"
                   />
                   <button
