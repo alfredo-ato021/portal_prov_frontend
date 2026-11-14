@@ -1448,4 +1448,56 @@ export class FactumfluxClient {
       body: JSON.stringify(policy),
     });
   }
+
+  async listBackofficeUsers(): Promise<BackofficeUser[]> {
+    return this.fetch('/api/v1/backoffice/users');
+  }
+
+  async createBackofficeUser(data: CreateBackofficeUserRequest): Promise<BackofficeUser> {
+    return this.fetch('/api/v1/backoffice/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateBackofficeUser(userId: string, data: UpdateBackofficeUserRequest): Promise<BackofficeUser> {
+    return this.fetch(`/api/v1/backoffice/users/${encodeURIComponent(userId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteBackofficeUser(userId: string): Promise<{ success: boolean; message: string }> {
+    return this.fetch(`/api/v1/backoffice/users/${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
+    });
+  }
+}
+
+export interface BackofficeUser {
+  id: string;
+  user_id: string;
+  email: string;
+  full_name: string;
+  phone: string;
+  role: 'tenant_admin' | 'treasury_lead' | 'approver' | 'auditor' | 'support' | string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateBackofficeUserRequest {
+  email: string;
+  full_name: string;
+  phone?: string;
+  role: string;
+  password?: string;
+}
+
+export interface UpdateBackofficeUserRequest {
+  full_name?: string;
+  phone?: string;
+  role?: string;
+  is_active?: boolean;
+  password?: string;
 }

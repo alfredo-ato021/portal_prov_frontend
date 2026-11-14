@@ -25,6 +25,7 @@ import { SireAndNegotiableUnifiedView } from './components/SireAndNegotiableUnif
 import { ClientSuppliersView } from './components/ClientSuppliersView';
 import { ClientIntegrationsView } from './components/ClientIntegrationsView';
 import { ClientQualificationView } from './components/ClientQualificationView';
+import { ClientUsersView } from './components/ClientUsersView';
 import { SuperAdminConsoleView } from './components/SuperAdminConsoleView';
 import { PurchaseOrderDetailModal } from './components/PurchaseOrderDetailModal';
 import { SystemModal, SystemModalType } from '@factumflux/ui';
@@ -798,6 +799,15 @@ export default function App() {
           {/* Supplier Qualification Tab */}
           {currentTab === 'qualification' && (
             <ClientQualificationView
+              client={client}
+              tenantId={tenantInfo.tenantId}
+              tenantName={tenantInfo.tenantName}
+            />
+          )}
+
+          {/* User Management Tab */}
+          {currentTab === 'users' && (
+            <ClientUsersView
               client={client}
               tenantId={tenantInfo.tenantId}
               tenantName={tenantInfo.tenantName}

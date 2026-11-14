@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   FileText,
@@ -8,9 +8,13 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   ShieldCheck,
   Users,
   Cpu,
+  Settings,
+  UserCog,
 } from 'lucide-react';
 
 export type ClientNavTab =
@@ -18,10 +22,11 @@ export type ClientNavTab =
   | 'invoices'
   | 'orders'
   | 'sire_negotiable'
-  | 'policies'
   | 'suppliers'
   | 'qualification'
-  | 'integrations';
+  | 'policies'
+  | 'integrations'
+  | 'users';
 
 interface ClientSidebarProps {
   currentTab: ClientNavTab;
@@ -41,7 +46,17 @@ export const ClientSidebar: React.FC<ClientSidebarProps> = ({
   onToggleCollapse,
   onLogout,
 }) => {
-  const menuItems = [
+  const isConfigTab = ['policies', 'integrations', 'users'].includes(currentTab);
+  const [isConfigOpen, setIsConfigOpen] = useState(true);
+
+  // Auto-expand if active tab is in config
+  useEffect(() => {
+    if (isConfigTab) {
+      setIsConfigOpen(true);
+    }
+  }, [currentTab, isConfigTab]);
+
+  const mainMenuItems = [
     {
       id: 'dashboard' as ClientNavTab,
       label: 'Dashboard Ejecutivo',
@@ -67,12 +82,6 @@ export const ClientSidebar: React.FC<ClientSidebarProps> = ({
       badge: 'Fusión',
     },
     {
-      id: 'policies' as ClientNavTab,
-      label: 'Políticas Matching',
-      icon: Sliders,
-      badge: null,
-    },
-    {
       id: 'suppliers' as ClientNavTab,
       label: 'Directorio Proveedores',
       icon: Users,
@@ -84,11 +93,26 @@ export const ClientSidebar: React.FC<ClientSidebarProps> = ({
       icon: ShieldCheck,
       badge: 'Auditoría',
     },
+  ];
+
+  const configMenuItems = [
+    {
+      id: 'policies' as ClientNavTab,
+      label: 'Políticas Matching',
+      icon: Sliders,
+      badge: null,
+    },
     {
       id: 'integrations' as ClientNavTab,
-      label: 'Integración ERP / APIs',
+      label: 'Integración',
       icon: Cpu,
       badge: 'Conectores',
+    },
+    {
+      id: 'users' as ClientNavTab,
+      label: 'Gestión de Usuario',
+      icon: UserCog,
+      badge: null,
     },
   ];
 
@@ -144,7 +168,7 @@ export const ClientSidebar: React.FC<ClientSidebarProps> = ({
 
       {/* Navigation List */}
       <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
-        {menuItems.map((item) => {
+        {mainMenuItems.map((item) => {
           const Icon = item.icon;
           const isActive = currentTab === item.id;
           return (
@@ -170,6 +194,93 @@ export const ClientSidebar: React.FC<ClientSidebarProps> = ({
             </button>
           );
         })}
+
+        {/* Separator */}
+        <div className="pt-2 pb-1">
+          <div className="border-t border-[#1F3558]" />
+        </div>
+
+        {/* Configuración Group Header / Collapsible */}
+        <div>
+          <button
+            onClick={() => {
+              if (isCollapsed) {
+                onSelectTab('policies');
+              } else {
+                setIsConfigOpen(!isConfigOpen);
+              }
+            }}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+              isConfigTab && !isConfigOpen
+                ? 'bg-[#0A7469] text-white'
+                : 'text-[#9AA8BC] hover:text-white hover:bg-[#1F3558]/60'
+            }`}
+            title={isCollapsed ? 'Configuración' : undefined}
+          >
+            <Settings className={`w-5 h-5 flex-shrink-0 ${isConfigTab ? 'text-[#4FC9BE]' : 'text-[#9AA8BC]'}`} />
+            {!isCollapsed && (
+              <span className="flex-1 text-left truncate font-semibold text-white">Configuración</span>
+            )}
+            {!isCollapsed && (
+              <span className="p-0.5 text-[#9AA8BC]">
+                {isConfigOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </span>
+            )}
+          </button>
+
+          {/* Config Submenu */}
+          {(!isCollapsed ? isConfigOpen : false) && (
+            <div className="ml-4 pl-3 my-1 border-l-2 border-[#1F3558] space-y-1 animate-in fade-in slide-in-from-top-1">
+              {configMenuItems.map((subItem) => {
+                const SubIcon = subItem.icon;
+                const isSubActive = currentTab === subItem.id;
+                return (
+                  <button
+                    key={subItem.id}
+                    onClick={() => onSelectTab(subItem.id)}
+                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all ${
+                      isSubActive
+                        ? 'bg-[#0A7469] text-white font-bold shadow-sm shadow-[#0A7469]/20'
+                        : 'text-[#9AA8BC] hover:text-white hover:bg-[#1F3558]/50'
+                    }`}
+                  >
+                    <SubIcon className={`w-4 h-4 flex-shrink-0 ${isSubActive ? 'text-white' : 'text-[#9AA8BC]'}`} />
+                    <span className="flex-1 text-left truncate">{subItem.label}</span>
+                    {subItem.badge && (
+                      <span className="px-1 py-0.2 text-[9px] font-bold rounded-full bg-[#4FC9BE]/20 text-[#4FC9BE] border border-[#4FC9BE]/30">
+                        {subItem.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* When collapsed: render sub-item icons directly */}
+          {isCollapsed && (
+            <div className="mt-1 space-y-1">
+              {configMenuItems.map((subItem) => {
+                const SubIcon = subItem.icon;
+                const isSubActive = currentTab === subItem.id;
+                return (
+                  <button
+                    key={subItem.id}
+                    onClick={() => onSelectTab(subItem.id)}
+                    className={`w-full flex justify-center py-2 rounded-xl transition-all ${
+                      isSubActive
+                        ? 'bg-[#0A7469] text-white shadow-md'
+                        : 'text-[#9AA8BC] hover:text-white hover:bg-[#1F3558]/60'
+                    }`}
+                    title={subItem.label}
+                  >
+                    <SubIcon className="w-4 h-4" />
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </nav>
 
       {/* Footer / Logout */}
