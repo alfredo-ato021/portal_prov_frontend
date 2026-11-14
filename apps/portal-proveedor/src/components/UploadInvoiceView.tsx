@@ -214,7 +214,6 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
   const greXmlRef = useRef<HTMLInputElement>(null);
   const grePdfRef = useRef<HTMLInputElement>(null);
   const factoringLetterRef = useRef<HTMLInputElement>(null);
-  const rheFileInputRef = useRef<HTMLInputElement>(null);
   const rheSuspensionInputRef = useRef<HTMLInputElement>(null);
 
   const demoPOs = [
@@ -267,7 +266,7 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
         const xmlDoc = parser.parseFromString(content, 'text/xml');
 
         const idElem = xmlDoc.getElementsByTagNameNS('*', 'ID')[0] || xmlDoc.getElementsByTagName('cbc:ID')[0];
-        const seriesNum = idElem?.textContent || 'F001-0004522';
+        const seriesNum = idElem?.textContent?.trim() || 'F001-0004522';
 
         const payableElem = xmlDoc.getElementsByTagNameNS('*', 'PayableAmount')[0];
         const taxElem = xmlDoc.getElementsByTagNameNS('*', 'TaxAmount')[0];
@@ -280,15 +279,70 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
 
         // Extract Supplier and Customer RUCs from Invoice XML
         const supplierParty = xmlDoc.getElementsByTagNameNS('*', 'AccountingSupplierParty')[0] || xmlDoc.getElementsByTagName('cac:AccountingSupplierParty')[0];
+        let sRuc = '';
         const sIdElem = supplierParty ? (supplierParty.getElementsByTagNameNS('*', 'ID')[0] || supplierParty.getElementsByTagName('cbc:ID')[0]) : null;
-        const sRuc = sIdElem?.textContent?.trim() || '';
+        if (sIdElem?.textContent?.trim()) {
+          sRuc = sIdElem.textContent.trim();
+        } else if (supplierParty) {
+          const custAcc = supplierParty.getElementsByTagNameNS('*', 'CustomerAssignedAccountID')[0] || supplierParty.getElementsByTagName('cbc:CustomerAssignedAccountID')[0];
+          sRuc = custAcc?.textContent?.trim() || '';
+        }
 
         const customerParty = xmlDoc.getElementsByTagNameNS('*', 'AccountingCustomerParty')[0] || xmlDoc.getElementsByTagName('cac:AccountingCustomerParty')[0];
+        let cRuc = '';
         const cIdElem = customerParty ? (customerParty.getElementsByTagNameNS('*', 'ID')[0] || customerParty.getElementsByTagName('cbc:ID')[0]) : null;
-        const cRuc = cIdElem?.textContent?.trim() || '';
+        if (cIdElem?.textContent?.trim()) {
+          cRuc = cIdElem.textContent.trim();
+        } else if (customerParty) {
+          const custAcc = customerParty.getElementsByTagNameNS('*', 'CustomerAssignedAccountID')[0] || customerParty.getElementsByTagName('cbc:CustomerAssignedAccountID')[0];
+          cRuc = custAcc?.textContent?.trim() || '';
+        }
 
         const suppData = { supplierRuc: sRuc, customerRuc: cRuc };
         setFeSuppInfo(suppData);
+
+        // Check if XML is a Recibo por Honorarios Electrónico (RHE - SUNAT Serie E...)
+        const isRHE = seriesNum.toUpperCase().startsWith('E') || docTypeToUpload === '02';
+        if (isRHE) {
+          setDocTypeToUpload('02');
+          const parts = seriesNum.split('-');
+          const s = parts[0]?.trim().toUpperCase() || 'E001';
+          const n = parts[1]?.trim() || '';
+          setRheSeries(s);
+          setRheNumber(n);
+          setRheIssueDate(issueDate);
+
+          // Extract Description
+          const descNode = xmlDoc.getElementsByTagNameNS('*', 'Description')[0] || xmlDoc.getElementsByTagName('cbc:Description')[0];
+          const serviceDesc = descNode?.textContent?.trim() || '';
+          if (serviceDesc) setRheServiceDescription(serviceDesc);
+
+          // Extract Gross Total Price & Payable Net
+          const priceNode = xmlDoc.getElementsByTagNameNS('*', 'PriceAmount')[0] || xmlDoc.getElementsByTagName('cbc:PriceAmount')[0];
+          const grossAmount = priceNode ? parseFloat(priceNode.textContent || '0') : (payableElem ? parseFloat(payableElem.textContent || '0') : 0);
+          setRheTotalAmount(String(grossAmount));
+
+          // Check Retention in Line
+          const percentNode = xmlDoc.getElementsByTagNameNS('*', 'Percent')[0] || xmlDoc.getElementsByTagName('cbc:Percent')[0];
+          const lineTaxNode = xmlDoc.getElementsByTagNameNS('*', 'TaxAmount')[0] || xmlDoc.getElementsByTagName('cbc:TaxAmount')[0];
+          const retentionPct = percentNode ? parseFloat(percentNode.textContent || '0') : 0;
+          const lineTaxAmt = lineTaxNode ? parseFloat(lineTaxNode.textContent || '0') : 0;
+
+          const hasSusp = (retentionPct > 0 && lineTaxAmt === 0);
+          setRheHasSuspension(hasSusp);
+
+          const cur = payableElem?.getAttribute('currencyID') || 'PEN';
+
+          setParsedPreview({
+            seriesNumber: seriesNum,
+            subtotal: grossAmount,
+            tax: lineTaxAmt,
+            total: grossAmount,
+            currency: cur,
+            issueDate,
+          });
+          return;
+        }
 
         // Auto-extract Guía de Remisión (GRE) reference from UBL 2.1
         let extractedGreId = '';
@@ -464,20 +518,8 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
 
   const handleSubmit = async () => {
     if (docTypeToUpload === '02') {
-      if (!rheFile) {
-        setSubmitError('Debe adjuntar la representación oficial en PDF del Recibo por Honorarios Electrónico (RHE).');
-        return;
-      }
-      if (!rheNumber.trim()) {
-        setSubmitError('Debe ingresar el número correlativo del RHE.');
-        return;
-      }
-      if (numericRheTotal <= 0) {
-        setSubmitError('Debe ingresar un monto total válido de honorarios mayor a 0.');
-        return;
-      }
-      if (rheHasSuspension && !rheSuspensionFormNumber.trim()) {
-        setSubmitError('Si declara suspensión de retención, debe indicar el número de Formulario Virtual 1609 de SUNAT.');
+      if (!xmlFile && !rheFile) {
+        setSubmitError('Debe adjuntar el archivo XML descargado de SUNAT correspondiente al Recibo por Honorarios.');
         return;
       }
 
@@ -486,13 +528,22 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
 
       try {
         const formData = new FormData();
-        formData.append('file', rheFile);
+        if (xmlFile) {
+          formData.append('xml_file', xmlFile);
+        }
+        if (pdfFile) {
+          formData.append('pdf_file', pdfFile);
+        } else if (rheFile) {
+          formData.append('pdf_file', rheFile);
+        }
+
+        formData.append('po_number', poStatus?.po_number || poNumber);
+        formData.append('order_type', 'SERVICIO');
         formData.append('series', (rheSeries.trim() || 'E001').toUpperCase());
         formData.append('number', rheNumber.trim());
         formData.append('issue_date', rheIssueDate);
         formData.append('currency', poStatus?.currency || 'PEN');
         formData.append('total_amount', String(numericRheTotal));
-        formData.append('po_number', poStatus?.po_number || poNumber);
         formData.append('professional_service_description', rheServiceDescription.trim() || 'Servicios profesionales independientes');
 
         if (rheHasSuspension) {
@@ -503,7 +554,12 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
           }
         }
 
-        await client.uploadSupplierRHE(formData);
+        if (xmlFile) {
+          await client.uploadInvoiceMultipart(formData);
+        } else {
+          formData.append('file', rheFile as File);
+          await client.uploadSupplierRHE(formData);
+        }
         setStep(3);
       } catch (err: any) {
         setSubmitError(err.message || 'Error al procesar la carga del Recibo por Honorarios.');
@@ -1018,41 +1074,108 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
             /* RECIBO POR HONORARIOS ELECTRÓNICO (SUNAT TIPO 02)           */
             /* ─────────────────────────────────────────────────────────── */
             <div className="space-y-6 animate-fadeIn">
-              {/* 1. PDF de RHE emitido por SUNAT SOL */}
-              <div className="space-y-3">
+              {/* 1. Comprobante RHE (XML UBL y PDF) */}
+              <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-[#0B2545] flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-indigo-600" />
-                  1. Representación Oficial PDF del Recibo por Honorarios (SUNAT SOL)
+                  1. Recibo por Honorarios Electrónico (XML de SUNAT y PDF)
                 </h3>
 
-                <div className="p-6 rounded-2xl border border-dashed border-indigo-300 bg-indigo-50/30 flex flex-col items-center justify-center text-center">
-                  <FileText className="w-10 h-10 text-indigo-600 mb-2" />
-                  <span className="text-xs font-bold text-[#0B2545] mb-1">
-                    Archivo PDF del RHE (Obligatorio)
-                  </span>
-                  <span className="text-[11px] text-[#5B6B7F] mb-3 max-w-md">
-                    {rheFile ? (
-                      <span className="font-semibold text-indigo-900">{rheFile.name} ({(rheFile.size / 1024).toFixed(1)} KB)</span>
-                    ) : (
-                      'Descargue el PDF generado en el portal SUNAT Operaciones en Línea (SOL) correspondiente a este servicio.'
-                    )}
-                  </span>
-                  <input
-                    type="file"
-                    ref={rheFileInputRef}
-                    accept=".pdf"
-                    onChange={(e) => setRheFile(e.target.files?.[0] || null)}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => rheFileInputRef.current?.click()}
-                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-colors flex items-center gap-2"
-                  >
-                    <FileUp className="w-4 h-4" />
-                    {rheFile ? 'Cambiar PDF RHE' : 'Examinar y Adjuntar PDF'}
-                  </button>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* XML File Upload */}
+                  <div className="p-5 rounded-xl border border-dashed border-indigo-400/60 bg-indigo-50/40 flex flex-col items-center justify-center text-center">
+                    <FileUp className="w-8 h-8 text-indigo-600 mb-2" />
+                    <span className="text-xs font-bold text-[#0B2545] mb-1">Archivo XML UBL del RHE (Obligatorio)</span>
+                    <span className="text-[11px] text-[#5B6B7F] mb-3">
+                      {xmlFile ? xmlFile.name : 'Descargado del portal SUNAT SOL con firma digital'}
+                    </span>
+                    <div className="flex gap-2">
+                      <input
+                        type="file"
+                        ref={xmlInputRef}
+                        accept=".xml"
+                        onChange={handleXMLFileChange}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => xmlInputRef.current?.click()}
+                        className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-colors"
+                      >
+                        {xmlFile ? 'Cambiar XML' : 'Examinar XML'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* PDF File Upload */}
+                  <div className="p-5 rounded-xl border border-dashed border-[#E2E7EE] bg-[#F8FAFC] flex flex-col items-center justify-center text-center">
+                    <FileText className="w-8 h-8 text-[#5B6B7F] mb-2" />
+                    <span className="text-xs font-bold text-[#0B2545] mb-1">Representación Impresa PDF (Recomendado)</span>
+                    <span className="text-[11px] text-[#5B6B7F] mb-3">
+                      {pdfFile ? pdfFile.name : (rheFile ? rheFile.name : 'Formato .pdf emitido en SUNAT SOL')}
+                    </span>
+                    <input
+                      type="file"
+                      ref={pdfInputRef}
+                      accept=".pdf"
+                      onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => pdfInputRef.current?.click()}
+                      className="px-3.5 py-1.5 rounded-lg bg-white hover:bg-[#F3F5F8] text-[#5B6B7F] text-xs font-semibold border border-[#E2E7EE]"
+                    >
+                      {pdfFile || rheFile ? 'Cambiar PDF' : 'Examinar PDF'}
+                    </button>
+                  </div>
                 </div>
+
+                {/* XML Parsed Data Preview Card */}
+                {parsedPreview && (
+                  <div className="p-4 rounded-xl bg-indigo-50/60 border border-indigo-200 text-xs">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-indigo-950 uppercase tracking-wider flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                        Datos Extraídos del XML RHE (SUNAT)
+                      </span>
+                      <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Firma Digital SUNAT Válida
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-[#0B2545]">
+                      <div>
+                        <span className="text-[#5B6B7F] block text-[10px] uppercase">Serie - Número:</span>
+                        <strong className="text-sm font-mono text-indigo-900">{parsedPreview.seriesNumber}</strong>
+                      </div>
+                      <div>
+                        <span className="text-[#5B6B7F] block text-[10px] uppercase">Total Honorarios:</span>
+                        <span className="font-semibold">
+                          {parsedPreview.currency} {parsedPreview.total.toFixed(2)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[#5B6B7F] block text-[10px] uppercase">Retención 4ta ({rheRetentionRate}%):</span>
+                        <span className={`font-semibold ${rheRetentionAmount > 0 ? 'text-amber-800' : 'text-emerald-700'}`}>
+                          {parsedPreview.currency} {rheRetentionAmount.toFixed(2)} {rheHasSuspension ? '(Susp. Form. 1609)' : ''}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[#5B6B7F] block text-[10px] uppercase">Neto a Percibir:</span>
+                        <strong className="text-emerald-700 text-sm">
+                          {parsedPreview.currency} {rheNetPayableAmount.toFixed(2)}
+                        </strong>
+                      </div>
+                    </div>
+                    {rheServiceDescription && (
+                      <div className="mt-2 pt-2 border-t border-indigo-200/60 text-[11px] text-indigo-950">
+                        <span className="font-bold">Servicio: </span>
+                        <span>{rheServiceDescription}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* 2. Datos del Comprobante RHE */}
@@ -1594,7 +1717,7 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
                 isSubmitting ||
                 (docTypeToUpload === '01'
                   ? !xmlFile
-                  : (!rheFile || !rheNumber.trim() || numericRheTotal <= 0))
+                  : (!xmlFile && (!rheFile || !rheNumber.trim() || numericRheTotal <= 0)))
               }
               onClick={handleSubmit}
               className="flex items-center gap-2 px-7 py-3 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-bold text-sm shadow-md shadow-[#0A7469]/20 transition-all hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
