@@ -3,7 +3,6 @@ import { FactumfluxClient, SupplierTenantItem } from '@factumflux/api-client';
 import { LoginScreen } from './components/LoginScreen';
 import { SupplierOnboardingScreen } from './components/SupplierOnboardingScreen';
 import { Sidebar, SupplierNavTab } from './components/Sidebar';
-import { DashboardView } from './components/DashboardView';
 import { InvoicesListView } from './components/InvoicesListView';
 import { UploadInvoiceView } from './components/UploadInvoiceView';
 import { QualificationView } from './components/QualificationView';
@@ -64,7 +63,7 @@ export default function App() {
 
   const [supplierInfo, setSupplierInfo] = useState(initialInfo);
 
-  const [currentTab, setCurrentTab] = useState<SupplierNavTab>('dashboard');
+  const [currentTab, setCurrentTab] = useState<SupplierNavTab>('invoices');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // Multi-tenant Workspace Picker state
@@ -153,7 +152,7 @@ export default function App() {
     }));
     setIsAuthenticated(true);
     setIsOnboardingMode(false);
-    setCurrentTab('dashboard');
+    setCurrentTab('invoices');
   };
 
   const handleLogout = () => {
@@ -234,15 +233,6 @@ export default function App() {
 
         {/* Scrollable View Area */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
-          {currentTab === 'dashboard' && (
-            <DashboardView
-              key={`${supplierInfo.tenantId}-${supplierInfo.ruc}`}
-              client={client}
-              onNavigateToUpload={() => setCurrentTab('upload')}
-              onNavigateToInvoices={() => setCurrentTab('invoices')}
-            />
-          )}
-
           {currentTab === 'invoices' && (
             <InvoicesListView
               key={`${supplierInfo.tenantId}-${supplierInfo.ruc}`}
@@ -256,7 +246,7 @@ export default function App() {
               key={`${supplierInfo.tenantId}-${supplierInfo.ruc}`}
               client={client}
               onSuccess={() => setCurrentTab('invoices')}
-              onCancel={() => setCurrentTab('dashboard')}
+              onCancel={() => setCurrentTab('invoices')}
               onNavigateToQualification={() => setCurrentTab('qualification')}
             />
           )}

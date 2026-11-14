@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  LayoutDashboard,
   FileText,
   UploadCloud,
   UserCog,
@@ -12,7 +11,7 @@ import {
   FolderLock,
 } from 'lucide-react';
 
-export type SupplierNavTab = 'dashboard' | 'invoices' | 'upload' | 'qualification' | 'wallet' | 'account' | 'whatsapp';
+export type SupplierNavTab = 'invoices' | 'upload' | 'qualification' | 'wallet' | 'account' | 'whatsapp';
 
 interface SidebarProps {
   currentTab: SupplierNavTab;
@@ -34,12 +33,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
 }) => {
   const menuItems = [
-    {
-      id: 'dashboard' as SupplierNavTab,
-      label: 'Dashboard',
-      icon: LayoutDashboard,
-      badge: null,
-    },
     {
       id: 'invoices' as SupplierNavTab,
       label: 'Mis Facturas',
