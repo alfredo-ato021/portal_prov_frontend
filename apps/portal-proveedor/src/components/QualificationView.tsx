@@ -95,11 +95,16 @@ export const QualificationView: React.FC<QualificationViewProps> = ({
       setCci(bank.cci || '');
       setAccountHolderName(bank.account_holder_name || gen.legal_name || '');
 
-      // Populate linked documents map
+      // Populate linked documents map (auto-match from wallet if not yet linked)
       const initialMap: Record<string, string> = {};
       qualData.documents.forEach((d) => {
         if (d.wallet_document?.id) {
           initialMap[d.document_type.code] = d.wallet_document.id;
+        } else {
+          const matchedInWallet = (walletData || []).find((w) => w.document_type_code === d.document_type.code);
+          if (matchedInWallet) {
+            initialMap[d.document_type.code] = matchedInWallet.id;
+          }
         }
       });
       setLinkedDocMap(initialMap);

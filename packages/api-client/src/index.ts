@@ -1332,8 +1332,19 @@ export class FactumfluxClient {
     return `${this.baseUrl}/api/v1/supplier/global/wallet/documents/${encodeURIComponent(documentId)}/content${queryString}`;
   }
 
-  async getSupplierQualification(): Promise<SupplierQualificationResponse> {
-    return this.fetch('/api/v1/supplier/qualification');
+  async getSupplierQualification(supplierId?: string): Promise<SupplierQualificationResponse> {
+    const params = new URLSearchParams();
+    if (supplierId) {
+      params.append('supplier_id', supplierId);
+    } else if (this.supplierRuc) {
+      params.append('supplier_ruc', this.supplierRuc);
+    }
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    return this.fetch(`/api/v1/supplier/qualification${queryString}`);
+  }
+
+  async getBackofficeSupplierQualification(supplierId: string): Promise<SupplierQualificationResponse> {
+    return this.fetch(`/api/v1/backoffice/qualification/suppliers/${encodeURIComponent(supplierId)}`);
   }
 
   async saveSupplierQualificationDraft(data: {

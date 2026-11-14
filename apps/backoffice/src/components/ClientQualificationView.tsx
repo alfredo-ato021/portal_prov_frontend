@@ -88,7 +88,9 @@ export const ClientQualificationView: React.FC<ClientQualificationViewProps> = (
     setActionSuccess(null);
     try {
       // In backoffice context, get status returns the response for the supplier
-      const detail = await client.getSupplierQualification();
+      const detail = await (client.getBackofficeSupplierQualification
+        ? client.getBackofficeSupplierQualification(supplierId)
+        : client.getSupplierQualification(supplierId));
       setSelectedSupplierDetail(detail);
       setApprovedLevel(detail.current_level || 1);
     } catch (err: any) {
@@ -194,7 +196,12 @@ export const ClientQualificationView: React.FC<ClientQualificationViewProps> = (
     }
   };
 
-  const generalData = selectedSupplierDetail?.general_data || {};
+  const selectedSupplierSummary = qualifications.find((q) => q.supplier_id === selectedSupplierId);
+  const generalData: Record<string, any> = {
+    ruc: selectedSupplierDetail?.general_data?.ruc || selectedSupplierSummary?.ruc || '',
+    legal_name: selectedSupplierDetail?.general_data?.legal_name || selectedSupplierSummary?.legal_name || '',
+    ...(selectedSupplierDetail?.general_data || {}),
+  };
 
   return (
     <div className="space-y-6">
@@ -598,39 +605,65 @@ export const ClientQualificationView: React.FC<ClientQualificationViewProps> = (
                             No se han vinculado documentos aún para este cliente.
                           </div>
                         ) : (
-                          selectedSupplierDetail.documents.map((doc, idx) => (
-                            <div key={idx} className="p-4 bg-white flex items-center justify-between text-xs hover:bg-slate-50">
-                              <div className="flex items-center gap-3">
-                                <FileText className="w-5 h-5 text-[#0A7469] flex-shrink-0" />
-                                <div>
-                                  <div className="font-bold text-[#0B2545]">{doc.document_type.name}</div>
-                                  <div className="text-[11px] text-[#5B6B7F] flex items-center gap-2 mt-0.5">
-                                    <span>Código: {doc.document_type.code}</span>
-                                    {doc.wallet_document?.expiry_date && (
-                                      <span>• Vence: {new Date(doc.wallet_document.expiry_date).toLocaleDateString('es-PE')}</span>
-                                    )}
+                          selectedSupplierDetail.documents.map((doc, idx) => {
+                            const isAttached = Boolean(doc.wallet_document?.id);
+                            const isApproved = doc.doc_status === 'APROBADO';
+                            const isObserved = doc.doc_status === 'OBSERVADO';
+
+                            return (
+                              <div key={idx} className="p-4 bg-white flex items-center justify-between text-xs hover:bg-slate-50 transition-colors">
+                                <div className="flex items-center gap-3">
+                                  <div className={`p-2 rounded-xl flex-shrink-0 ${isAttached ? 'bg-emerald-50 text-[#0A7469]' : 'bg-slate-100 text-slate-400'}`}>
+                                    <FileText className="w-5 h-5" />
+                                  </div>
+                                  <div>
+                                    <div className="font-bold text-[#0B2545] flex items-center gap-2">
+                                      <span>{doc.document_type.name}</span>
+                                      {doc.document_type.is_mandatory && (
+                                        <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                                          Obligatorio
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[11px] text-[#5B6B7F] flex items-center gap-2 mt-0.5 flex-wrap">
+                                      <span>Código: {doc.document_type.code}</span>
+                                      {doc.wallet_document?.file_name && (
+                                        <span className="font-medium text-slate-800">• Archivo: {doc.wallet_document.file_name}</span>
+                                      )}
+                                      {doc.wallet_document?.expiry_date && (
+                                        <span>• Vence: {new Date(doc.wallet_document.expiry_date).toLocaleDateString('es-PE')}</span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
 
-                              <div className="flex items-center gap-2">
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
-                                  {doc.doc_status}
-                                </span>
-                                {doc.wallet_document?.id && (
-                                  <a
-                                    href={`/api/v1/supplier/global/wallet/documents/${doc.wallet_document.id}/content`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-[#0A7469] flex items-center gap-1 font-semibold"
-                                  >
-                                    <ExternalLink className="w-3.5 h-3.5" />
-                                    <span>Ver PDF</span>
-                                  </a>
-                                )}
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                                    isApproved
+                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                      : isObserved
+                                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                      : isAttached
+                                      ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                      : 'bg-slate-100 text-slate-500 border border-slate-200'
+                                  }`}>
+                                    {isApproved ? 'Aprobado' : isObserved ? 'Observado' : isAttached ? 'Adjuntado (Por Auditar)' : 'No Adjuntado'}
+                                  </span>
+                                  {doc.wallet_document?.id && (
+                                    <a
+                                      href={`/api/v1/supplier/global/wallet/documents/${doc.wallet_document.id}/content`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="p-1.5 px-2.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-[#0A7469] flex items-center gap-1 font-semibold transition-colors"
+                                    >
+                                      <ExternalLink className="w-3.5 h-3.5" />
+                                      <span>Ver PDF</span>
+                                    </a>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          ))
+                            );
+                          })
                         )}
                       </div>
                     </div>
