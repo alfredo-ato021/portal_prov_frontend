@@ -276,30 +276,6 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
     reader.readAsText(file);
   };
 
-  const handleSimulateXmlLoad = () => {
-    const dummyXml = new File(
-      [
-        `<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
-          <cbc:ID>F001-0004522</cbc:ID>
-          <cbc:IssueDate>2026-11-04</cbc:IssueDate>
-          <cbc:DocumentCurrencyCode>${poStatus?.currency || 'PEN'}</cbc:DocumentCurrencyCode>
-          <cbc:PayableAmount>${poStatus?.total_amount || 14250.0}</cbc:PayableAmount>
-        </Invoice>`,
-      ],
-      '20601234567-01-F001-0004522.xml',
-      { type: 'application/xml' }
-    );
-    setXmlFile(dummyXml);
-    setParsedPreview({
-      seriesNumber: 'F001-0004522',
-      subtotal: ((poStatus?.total_amount || 14250.0) / 1.18),
-      tax: (poStatus?.total_amount || 14250.0) - ((poStatus?.total_amount || 14250.0) / 1.18),
-      total: poStatus?.total_amount || 14250.0,
-      currency: poStatus?.currency || 'PEN',
-      issueDate: new Date().toISOString().split('T')[0],
-    });
-  };
-
   const handleSubmit = async () => {
     if (!xmlFile) {
       setSubmitError('Debe adjuntar el archivo XML de la factura.');
@@ -764,15 +740,6 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
                   >
                     {xmlFile ? 'Cambiar XML' : 'Examinar XML'}
                   </button>
-                  {!xmlFile && (
-                    <button
-                      type="button"
-                      onClick={handleSimulateXmlLoad}
-                      className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-[#F3F5F8] text-[#0A7469] text-xs font-semibold border border-[#E2E7EE]"
-                    >
-                      Autocargar demo
-                    </button>
-                  )}
                 </div>
               </div>
 
