@@ -14,30 +14,26 @@ import {
   X,
   Activity,
   AlertTriangle,
+  Info,
+  User,
+  Cpu,
+  FileCheck2,
 } from 'lucide-react';
 import {
   FactumfluxClient,
   AuditEvent,
 } from '@factumflux/api-client';
+import {
+  getFriendlyAction,
+  getFriendlyEntity,
+  getFriendlyActor,
+} from './auditHelpers';
 
 interface ClientAuditLogsViewProps {
   client: FactumfluxClient;
   tenantId: string;
   tenantName: string;
 }
-
-const ACTION_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  BATCH_PURCHASE_ORDERS_INGESTED: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
-  INVOICE_UBL_PARSED_AND_STORED: { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200' },
-  INVOICE_3WAY_MATCH_EXECUTED: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
-  INVOICE_PAYMENT_SCHEDULED: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200' },
-  SUPPLIER_QUALIFICATION_APPROVED: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
-  SUPPLIER_QUALIFICATION_OBSERVED: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
-  USER_INVITED_OR_CREATED: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
-  USER_ROLE_UPDATED: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
-  MATCHING_POLICY_UPDATED: { bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-200' },
-  ERP_INTEGRATION_TESTED: { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200' },
-};
 
 export const ClientAuditLogsView: React.FC<ClientAuditLogsViewProps> = ({
   client,
@@ -82,24 +78,44 @@ export const ClientAuditLogsView: React.FC<ClientAuditLogsViewProps> = ({
 
   const handleExportCSV = () => {
     if (logs.length === 0) return;
-    const headers = ['ID', 'Timestamp', 'Actor', 'IP', 'Accion', 'Categoria', 'Entidad', 'EntityID', 'Hash_Payload', 'Hash_Actual'];
-    const rows = filteredLogs.map((l) => [
-      l.id,
-      `"${l.created_at}"`,
-      `"${l.actor_email}"`,
-      `"${l.actor_ip || ''}"`,
-      `"${l.action}"`,
-      `"${l.category || 'OPERATIONAL'}"`,
-      `"${l.entity_name}"`,
-      `"${l.entity_id}"`,
-      `"${l.payload_hash}"`,
-      `"${l.current_event_hash}"`,
-    ]);
+    const headers = [
+      'ID',
+      'Fecha_Hora',
+      'Actor_Nombre',
+      'Actor_Email',
+      'IP_Origen',
+      'Accion_Codigo',
+      'Accion_Nombre',
+      'Categoria',
+      'Entidad',
+      'ID_Entidad',
+      'Sello_SHA256_Actual',
+      'Sello_SHA256_Previo',
+    ];
+    const rows = filteredLogs.map((l) => {
+      const actionMeta = getFriendlyAction(l.action);
+      const actorMeta = getFriendlyActor(l.actor_email);
+      const entityMeta = getFriendlyEntity(l.entity_name);
+      return [
+        l.id,
+        `"${new Date(l.created_at).toLocaleString('es-PE')}"`,
+        `"${actorMeta.title}"`,
+        `"${l.actor_email}"`,
+        `"${l.actor_ip || ''}"`,
+        `"${l.action}"`,
+        `"${actionMeta.title}"`,
+        `"${actionMeta.categoryLabel}"`,
+        `"${entityMeta.label}"`,
+        `"${l.entity_id}"`,
+        `"${l.current_event_hash}"`,
+        `"${l.prev_event_hash}"`,
+      ];
+    });
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `audit_logs_${tenantName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `bitacora_auditoria_${tenantName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -107,8 +123,16 @@ export const ClientAuditLogsView: React.FC<ClientAuditLogsViewProps> = ({
 
   const filteredLogs = logs.filter((log) => {
     const term = searchTerm.toLowerCase();
+    const actionMeta = getFriendlyAction(log.action);
+    const entityMeta = getFriendlyEntity(log.entity_name);
+    const actorMeta = getFriendlyActor(log.actor_email);
+
     const matchesSearch =
       log.action.toLowerCase().includes(term) ||
+      actionMeta.title.toLowerCase().includes(term) ||
+      actionMeta.description.toLowerCase().includes(term) ||
+      entityMeta.label.toLowerCase().includes(term) ||
+      actorMeta.title.toLowerCase().includes(term) ||
       log.actor_email.toLowerCase().includes(term) ||
       log.entity_name.toLowerCase().includes(term) ||
       (log.actor_ip && log.actor_ip.includes(term)) ||
@@ -132,10 +156,10 @@ export const ClientAuditLogsView: React.FC<ClientAuditLogsViewProps> = ({
         <div>
           <h1 className="text-2xl font-bold text-[#0B2545] tracking-tight flex items-center gap-2">
             <ShieldCheck className="w-6 h-6 text-[#0A7469]" />
-            Logs del Sistema & Auditoría Operativa
+            Bitácora de Operaciones & Auditoría
           </h1>
           <p className="text-sm text-[#5B6B7F] mt-1">
-            Bitácora inmutable encadenada criptográficamente (SHA-256) con trazabilidad fiscal, operacional y de accesos para {tenantName}.
+            Registro cronológico inmutable de actividades operativas, comprobantes y accesos para {tenantName}.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -143,7 +167,7 @@ export const ClientAuditLogsView: React.FC<ClientAuditLogsViewProps> = ({
             onClick={loadLogs}
             disabled={loading}
             className="p-2.5 rounded-xl border border-[#E2E7EE] bg-white text-[#5B6B7F] hover:text-[#0B2545] hover:bg-[#F8FAFC] transition-colors"
-            title="Recargar bitácora"
+            title="Actualizar bitácora"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -153,8 +177,23 @@ export const ClientAuditLogsView: React.FC<ClientAuditLogsViewProps> = ({
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#E2E7EE] bg-white hover:bg-[#F8FAFC] text-[#0B2545] font-semibold text-xs shadow-sm transition-all"
           >
             <Download className="w-4 h-4 text-[#0A7469]" />
-            <span>Exportar CSV</span>
+            <span>Descargar Reporte (CSV)</span>
           </button>
+        </div>
+      </div>
+
+      {/* Banner explicativo de negocio */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50/80 via-teal-50/50 to-white border border-emerald-100/80 flex items-start gap-3 shadow-xs">
+        <div className="w-8 h-8 rounded-xl bg-emerald-600/10 text-emerald-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <Info className="w-4 h-4" />
+        </div>
+        <div className="text-xs text-[#0B2545] space-y-1">
+          <p className="font-bold text-emerald-950">
+            ¿Cómo funciona esta bitácora y por qué es confiable?
+          </p>
+          <p className="text-[#475569] leading-relaxed">
+            Cada vez que un proveedor sube una factura, se carga un lote de órdenes de compra o se aprueba una homologación, el sistema registra el hecho de forma <strong>inmutable</strong>. Cada operación genera un <strong>Sello Digital Criptográfico (SHA-256)</strong> encadenado al registro anterior. Esto garantiza ante cualquier auditoría que ningún dato ha sido modificado ni borrado retroactivamente.
+          </p>
         </div>
       </div>
 
@@ -178,20 +217,20 @@ export const ClientAuditLogsView: React.FC<ClientAuditLogsViewProps> = ({
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl p-4 border border-[#E2E7EE] shadow-sm">
           <div className="flex items-center justify-between text-[#5B6B7F] mb-1">
-            <span className="text-xs font-semibold uppercase tracking-wider">TOTAL REGISTROS</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">TOTAL ACTIVIDADES</span>
             <Layers className="w-4 h-4 text-[#0A7469]" />
           </div>
           <div className="text-2xl font-bold text-[#0B2545]">{totalEvents}</div>
-          <p className="text-[11px] text-[#5B6B7F] mt-0.5">Eventos inmutables en ledger</p>
+          <p className="text-[11px] text-[#5B6B7F] mt-0.5">Eventos reales registrados</p>
         </div>
 
         <div className="bg-white rounded-2xl p-4 border border-[#E2E7EE] shadow-sm">
           <div className="flex items-center justify-between text-[#5B6B7F] mb-1">
-            <span className="text-xs font-semibold uppercase tracking-wider">OPERACIONALES</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">OPERACIONES COMERCIALES</span>
             <Activity className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="text-2xl font-bold text-emerald-700">{operationalCount}</div>
-          <p className="text-[11px] text-[#5B6B7F] mt-0.5">Comprobantes, OC, MIGO y Cuadres</p>
+          <p className="text-[11px] text-[#5B6B7F] mt-0.5">Facturas, OC y Cuadres</p>
         </div>
 
         <div className="bg-white rounded-2xl p-4 border border-[#E2E7EE] shadow-sm">
@@ -200,16 +239,16 @@ export const ClientAuditLogsView: React.FC<ClientAuditLogsViewProps> = ({
             <Lock className="w-4 h-4 text-purple-600" />
           </div>
           <div className="text-2xl font-bold text-purple-700">{securityCount}</div>
-          <p className="text-[11px] text-[#5B6B7F] mt-0.5">Logins, roles y modificaciones</p>
+          <p className="text-[11px] text-[#5B6B7F] mt-0.5">Inicios de sesión y usuarios</p>
         </div>
 
         <div className="bg-white rounded-2xl p-4 border border-[#E2E7EE] shadow-sm">
           <div className="flex items-center justify-between text-[#5B6B7F] mb-1">
-            <span className="text-xs font-semibold uppercase tracking-wider">SELLADO CRIPTOGRÁFICO</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">INTEGRIDAD GARANTIZADA</span>
             <ShieldCheck className="w-4 h-4 text-teal-600" />
           </div>
           <div className="text-2xl font-bold text-teal-700">100%</div>
-          <p className="text-[11px] text-[#5B6B7F] mt-0.5">Tamper-evident SHA-256 verificado</p>
+          <p className="text-[11px] text-[#5B6B7F] mt-0.5">Sellado digital inviolable</p>
         </div>
       </div>
 
@@ -221,22 +260,22 @@ export const ClientAuditLogsView: React.FC<ClientAuditLogsViewProps> = ({
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por acción, correo de actor, entidad, IP o hash SHA-256..."
+            placeholder="Buscar por actividad (ej: facturas, órdenes, usuarios) o persona..."
             className="w-full pl-9 pr-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-xs text-[#0B2545] focus:outline-none focus:border-[#0A7469]"
           />
         </div>
 
         <div className="flex items-center gap-2">
           <Filter className="w-3.5 h-3.5 text-[#5B6B7F]" />
-          <span className="text-xs text-[#5B6B7F] font-semibold">Categoría:</span>
+          <span className="text-xs text-[#5B6B7F] font-semibold">Tipo:</span>
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value as any)}
             className="px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-xs text-[#0B2545] font-medium focus:outline-none focus:border-[#0A7469]"
           >
-            <option value="ALL">Todas las Categorías ({logs.length})</option>
-            <option value="OPERATIONAL">Operativo ({operationalCount})</option>
-            <option value="SECURITY">Seguridad & Accesos ({securityCount})</option>
+            <option value="ALL">Todas las Actividades ({logs.length})</option>
+            <option value="OPERATIONAL">Operaciones ({operationalCount})</option>
+            <option value="SECURITY">Seguridad & Usuarios ({securityCount})</option>
             <option value="SYSTEM">Sistema & ERP ({systemCount})</option>
           </select>
         </div>
@@ -247,14 +286,14 @@ export const ClientAuditLogsView: React.FC<ClientAuditLogsViewProps> = ({
         {loading ? (
           <div className="py-16 text-center">
             <RefreshCw className="w-8 h-8 text-[#0A7469] animate-spin mx-auto mb-2" />
-            <p className="text-xs text-[#5B6B7F]">Cargando bitácora criptográfica...</p>
+            <p className="text-xs text-[#5B6B7F]">Cargando bitácora de operaciones...</p>
           </div>
         ) : filteredLogs.length === 0 ? (
           <div className="py-16 text-center">
             <Terminal className="w-12 h-12 text-[#9AA8BC] mx-auto mb-3" />
-            <h3 className="text-sm font-bold text-[#0B2545]">No se registran eventos</h3>
+            <h3 className="text-sm font-bold text-[#0B2545]">No se registran actividades</h3>
             <p className="text-xs text-[#5B6B7F] mt-1">
-              No hay logs que coincidan con la búsqueda o filtros aplicados.
+              No hay actividades que coincidan con la búsqueda o filtro aplicado.
             </p>
           </div>
         ) : (
@@ -262,74 +301,111 @@ export const ClientAuditLogsView: React.FC<ClientAuditLogsViewProps> = ({
             <table className="w-full text-left text-xs">
               <thead className="bg-[#F8FAFC] text-[#5B6B7F] font-semibold border-b border-[#E2E7EE]">
                 <tr>
-                  <th className="py-3 px-4">TIMESTAMP</th>
-                  <th className="py-3 px-4">ACTOR / USUARIO</th>
-                  <th className="py-3 px-4">ACCIÓN OPERATIVA</th>
-                  <th className="py-3 px-4">ENTIDAD</th>
-                  <th className="py-3 px-4">HASH SHA-256 (ACTUAL)</th>
-                  <th className="py-3 px-4 text-right">AUDITORÍA</th>
+                  <th className="py-3 px-4">FECHA Y HORA</th>
+                  <th className="py-3 px-4">ACTIVIDAD REALIZADA</th>
+                  <th className="py-3 px-4">MÓDULO / DOCUMENTO</th>
+                  <th className="py-3 px-4">RESPONSABLE</th>
+                  <th className="py-3 px-4">SELLO DE SEGURIDAD</th>
+                  <th className="py-3 px-4 text-right">ACCIONES</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E2E7EE] font-mono">
+              <tbody className="divide-y divide-[#E2E7EE]">
                 {filteredLogs.map((log) => {
-                  const actionStyle = ACTION_COLORS[log.action] || {
-                    bg: 'bg-slate-50',
-                    text: 'text-slate-700',
-                    border: 'border-slate-200',
-                  };
-                  const dateStr = log.created_at ? new Date(log.created_at).toLocaleString('es-PE') : '—';
+                  const actionMeta = getFriendlyAction(log.action);
+                  const entityMeta = getFriendlyEntity(log.entity_name);
+                  const actorMeta = getFriendlyActor(log.actor_email);
+                  const dateStr = log.created_at ? new Date(log.created_at).toLocaleString('es-PE', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  }) : '—';
                   const isCopied = copiedHash === log.current_event_hash;
 
                   return (
                     <tr key={log.id} className="hover:bg-[#F8FAFC] transition-colors">
-                      <td className="py-3 px-4 text-[#5B6B7F] whitespace-nowrap text-[11px]">
+                      {/* Fecha y Hora */}
+                      <td className="py-3.5 px-4 text-[#5B6B7F] whitespace-nowrap text-[11px] font-medium">
                         {dateStr}
                       </td>
-                      <td className="py-3 px-4 font-sans">
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-[#0B2545] text-xs">{log.actor_email}</span>
-                          {log.actor_ip && (
-                            <span className="text-[10px] text-[#9AA8BC] font-mono">IP: {log.actor_ip}</span>
-                          )}
+
+                      {/* Actividad */}
+                      <td className="py-3.5 px-4">
+                        <div className="flex flex-col gap-1 max-w-sm">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold border ${actionMeta.badgeBg} ${actionMeta.badgeText} ${actionMeta.badgeBorder}`}
+                            >
+                              {actionMeta.categoryLabel}
+                            </span>
+                            <span className="font-bold text-[#0B2545] text-xs">
+                              {actionMeta.title}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-[#5B6B7F] line-clamp-1">
+                            {actionMeta.description}
+                          </p>
                         </div>
                       </td>
-                      <td className="py-3 px-4 font-sans">
-                        <div className="flex flex-col gap-0.5">
-                          <span
-                            className={`inline-block w-max px-2 py-0.5 rounded-full text-[10px] font-bold border ${actionStyle.bg} ${actionStyle.text} ${actionStyle.border}`}
-                          >
-                            {log.action}
-                          </span>
-                          <span className="text-[10px] text-[#5B6B7F]">
-                            {log.category || 'OPERATIONAL'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 font-mono text-[11px] text-[#5B6B7F]">
-                        <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
-                          {log.entity_name}
+
+                      {/* Entidad */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${entityMeta.badgeClass}`}>
+                          <FileCheck2 className="w-3.5 h-3.5" />
+                          <span>{entityMeta.label}</span>
                         </span>
                       </td>
-                      <td className="py-3 px-4">
+
+                      {/* Actor / Responsable */}
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-start gap-2">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${actorMeta.isBot ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-700'}`}>
+                            {actorMeta.isBot ? <Cpu className="w-3 h-3" /> : <User className="w-3 h-3" />}
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-[#0B2545] text-xs leading-snug">
+                              {actorMeta.title}
+                            </span>
+                            <span className="text-[10px] text-[#9AA8BC] truncate max-w-[180px]">
+                              {actorMeta.subtitle}
+                            </span>
+                            {log.actor_ip && (
+                              <span className="text-[9px] text-[#9AA8BC] font-mono">
+                                Red: {log.actor_ip}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Sello de Seguridad */}
+                      <td className="py-3.5 px-4">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] text-[#0A7469] font-mono font-semibold">
-                            {log.current_event_hash.substring(0, 16)}...
-                          </span>
+                          <div className="flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md text-[10px] font-bold">
+                            <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                            <span>Inalterable</span>
+                          </div>
                           <button
                             onClick={() => copyToClipboard(log.current_event_hash)}
                             className="p-1 rounded hover:bg-slate-100 text-[#9AA8BC] hover:text-[#0A7469] transition-colors"
-                            title="Copiar Hash Completo"
+                            title="Copiar Sello Digital Completo"
                           >
                             {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                           </button>
                         </div>
+                        <span className="text-[9px] font-mono text-[#9AA8BC] block mt-0.5 truncate max-w-[120px]">
+                          {log.current_event_hash.substring(0, 14)}...
+                        </span>
                       </td>
-                      <td className="py-3 px-4 text-right font-sans">
+
+                      {/* Acciones */}
+                      <td className="py-3.5 px-4 text-right">
                         <button
                           onClick={() => setSelectedLog(log)}
-                          className="px-2.5 py-1 rounded-lg border border-[#E2E7EE] bg-white text-[#0A7469] hover:bg-[#E8F4F2] font-semibold text-[11px] transition-colors"
+                          className="px-3 py-1.5 rounded-xl border border-[#E2E7EE] bg-white text-[#0A7469] hover:bg-[#E8F4F2] font-semibold text-xs transition-colors shadow-2xs"
                         >
-                          Ver Detalle
+                          Ver Certificado
                         </button>
                       </td>
                     </tr>
@@ -346,112 +422,114 @@ export const ClientAuditLogsView: React.FC<ClientAuditLogsViewProps> = ({
         <div className="fixed inset-0 bg-[#0B2545]/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white border border-[#E2E7EE] rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-xl animate-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-[#E2E7EE]">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-[#0A7469]/10 text-[#0A7469] flex items-center justify-center font-bold">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[#0A7469]/10 text-[#0A7469] flex items-center justify-center font-bold">
                   <ShieldCheck className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-bold text-[#0B2545] text-sm">
-                    Detalle de Evento de Auditoría #{selectedLog.id}
+                    Certificado de Actividad #{selectedLog.id}
                   </h3>
                   <p className="text-[11px] text-[#5B6B7F]">
-                    Sello inmutable encadenado para cumplimiento fiscal y corporativo
+                    Garantía de inmutabilidad y trazabilidad legal de Factumflux
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setSelectedLog(null)}
-                className="text-[#5B6B7F] hover:text-[#0B2545] p-1 rounded-lg"
+                className="text-[#5B6B7F] hover:text-[#0B2545] p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div className="grid grid-cols-2 gap-3 p-3 bg-[#F8FAFC] rounded-xl border border-[#E2E7EE]">
-                <div>
-                  <span className="block text-[10px] text-[#5B6B7F] font-semibold uppercase">ACCION</span>
-                  <span className="font-bold text-[#0B2545] text-xs">{selectedLog.action}</span>
+            <div className="space-y-4 text-xs">
+              {/* Resumen Amigable */}
+              <div className="p-3.5 bg-[#F8FAFC] rounded-xl border border-[#E2E7EE] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-[#5B6B7F] font-bold uppercase tracking-wider">
+                    OPERACIÓN REALIZADA
+                  </span>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                    {getFriendlyAction(selectedLog.action).categoryLabel}
+                  </span>
                 </div>
+                <h4 className="text-sm font-bold text-[#0B2545]">
+                  {getFriendlyAction(selectedLog.action).title}
+                </h4>
+                <p className="text-xs text-[#5B6B7F]">
+                  {getFriendlyAction(selectedLog.action).description}
+                </p>
+              </div>
+
+              {/* Ficha de Detalles de Negocio */}
+              <div className="grid grid-cols-2 gap-3 p-3.5 bg-white rounded-xl border border-[#E2E7EE]">
                 <div>
-                  <span className="block text-[10px] text-[#5B6B7F] font-semibold uppercase">TIMESTAMP</span>
-                  <span className="text-xs text-[#0B2545] font-mono">
+                  <span className="block text-[10px] text-[#5B6B7F] font-semibold uppercase">FECHA Y HORA</span>
+                  <span className="text-xs text-[#0B2545] font-medium">
                     {new Date(selectedLog.created_at).toLocaleString('es-PE')}
                   </span>
                 </div>
                 <div>
-                  <span className="block text-[10px] text-[#5B6B7F] font-semibold uppercase">ACTOR / USUARIO</span>
-                  <span className="text-xs text-[#0B2545] font-medium">{selectedLog.actor_email}</span>
+                  <span className="block text-[10px] text-[#5B6B7F] font-semibold uppercase">DOCUMENTO / MÓDULO</span>
+                  <span className="text-xs text-[#0B2545] font-medium">
+                    {getFriendlyEntity(selectedLog.entity_name).label}
+                  </span>
                 </div>
                 <div>
-                  <span className="block text-[10px] text-[#5B6B7F] font-semibold uppercase">IP DE ORIGEN</span>
-                  <span className="text-xs text-[#0B2545] font-mono">{selectedLog.actor_ip || '127.0.0.1 / Interno'}</span>
+                  <span className="block text-[10px] text-[#5B6B7F] font-semibold uppercase">RESPONSABLE</span>
+                  <span className="text-xs text-[#0B2545] font-medium">
+                    {getFriendlyActor(selectedLog.actor_email).title}
+                  </span>
+                  <span className="block text-[10px] text-[#9AA8BC]">{selectedLog.actor_email}</span>
                 </div>
                 <div>
-                  <span className="block text-[10px] text-[#5B6B7F] font-semibold uppercase">ENTIDAD</span>
-                  <span className="text-xs text-[#0B2545] font-mono">{selectedLog.entity_name}</span>
-                </div>
-                <div>
-                  <span className="block text-[10px] text-[#5B6B7F] font-semibold uppercase">ID DE ENTIDAD</span>
-                  <span className="text-xs text-[#0B2545] font-mono truncate" title={selectedLog.entity_id}>
-                    {selectedLog.entity_id}
+                  <span className="block text-[10px] text-[#5B6B7F] font-semibold uppercase">ORIGEN DE LA RED</span>
+                  <span className="text-xs text-[#0B2545] font-mono">
+                    {selectedLog.actor_ip || '127.0.0.1 (Servidor Interno)'}
                   </span>
                 </div>
               </div>
 
-              {/* Hashes encadenados */}
-              <div className="space-y-2 p-3 bg-slate-900 text-slate-100 rounded-xl font-mono text-[11px]">
-                <div>
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
-                    <span>PREV EVENT HASH (ENCADENAMIENTO)</span>
-                    <button
-                      onClick={() => copyToClipboard(selectedLog.prev_event_hash)}
-                      className="hover:text-emerald-400"
-                    >
-                      Copiar
-                    </button>
-                  </div>
-                  <div className="p-1.5 bg-slate-800 rounded text-slate-300 break-all text-[10px]">
-                    {selectedLog.prev_event_hash}
-                  </div>
+              {/* Certificado de Peritaje Criptográfico */}
+              <div className="space-y-2 p-3.5 bg-slate-900 text-slate-100 rounded-xl font-mono text-[11px]">
+                <div className="flex items-center justify-between text-[10px] text-slate-400 pb-1 border-b border-slate-800">
+                  <span className="font-sans font-semibold text-slate-300">
+                    Peritaje Criptográfico (SHA-256 Ledger)
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-bold">Verificado</span>
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
-                    <span>PAYLOAD SHA-256 HASH</span>
-                    <button
-                      onClick={() => copyToClipboard(selectedLog.payload_hash)}
-                      className="hover:text-emerald-400"
-                    >
-                      Copiar
-                    </button>
-                  </div>
-                  <div className="p-1.5 bg-slate-800 rounded text-slate-300 break-all text-[10px]">
-                    {selectedLog.payload_hash}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between text-[10px] text-emerald-400 font-bold mb-0.5">
-                    <span>CURRENT EVENT HASH (SELLO INMUTABLE)</span>
+                    <span>SELLO DIGITAL DE ESTE REGISTRO:</span>
                     <button
                       onClick={() => copyToClipboard(selectedLog.current_event_hash)}
-                      className="hover:text-emerald-300"
+                      className="text-emerald-400 hover:text-emerald-300 font-sans text-[10px]"
                     >
                       Copiar
                     </button>
                   </div>
-                  <div className="p-1.5 bg-slate-800 rounded text-emerald-300 break-all text-[10px] font-bold border border-emerald-500/30">
+                  <div className="p-2 bg-slate-800 rounded text-emerald-300 break-all text-[10px] font-bold border border-emerald-500/30">
                     {selectedLog.current_event_hash}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
+                    <span>ESLABÓN ANTERIOR (ENCADENAMIENTO):</span>
+                  </div>
+                  <div className="p-1.5 bg-slate-800/60 rounded text-slate-400 break-all text-[9px]">
+                    {selectedLog.prev_event_hash}
                   </div>
                 </div>
               </div>
 
-              {/* Status Banner */}
-              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              {/* Sello de Garantía */}
+              <div className="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
                 <span>
-                  <strong>Registro Tamper-Evident:</strong> Este evento está protegido contra modificaciones y eliminaciones mediante trigger inmutable a nivel de base de datos.
+                  <strong>Garantía Inmutable:</strong> Este registro fue sellado en el momento exacto de su ejecución y no puede ser alterado ni eliminado por ninguna persona ni proceso.
                 </span>
               </div>
             </div>
@@ -461,7 +539,7 @@ export const ClientAuditLogsView: React.FC<ClientAuditLogsViewProps> = ({
                 onClick={() => setSelectedLog(null)}
                 className="px-4 py-2 rounded-xl bg-[#0B2545] text-white font-semibold text-xs hover:bg-[#1F3558] transition-colors"
               >
-                Cerrar
+                Cerrar Certificado
               </button>
             </div>
           </div>

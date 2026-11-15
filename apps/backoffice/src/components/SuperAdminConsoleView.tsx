@@ -34,6 +34,11 @@ import {
   TenantUserItem,
 } from '@factumflux/api-client';
 import { SystemModal, SystemModalType } from '@factumflux/ui';
+import {
+  getFriendlyAction,
+  getFriendlyEntity,
+  getFriendlyActor,
+} from './auditHelpers';
 
 interface SuperAdminConsoleViewProps {
   client: FactumfluxClient;
@@ -1083,23 +1088,33 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="border-b border-[#E2E7EE] bg-[#F8FAFC] text-[#5B6B7F] uppercase tracking-wider font-semibold">
-                        <th className="py-3 px-4">Timestamp</th>
-                        <th className="py-3 px-4">Tenant</th>
-                        <th className="py-3 px-4">Actor</th>
-                        <th className="py-3 px-4">Acción</th>
-                        <th className="py-3 px-4">Entidad</th>
-                        <th className="py-3 px-4">Hash SHA-256 Actual</th>
+                        <th className="py-3 px-4">Fecha y Hora</th>
+                        <th className="py-3 px-4">Empresa / Tenant</th>
+                        <th className="py-3 px-4">Responsable</th>
+                        <th className="py-3 px-4">Actividad Operativa</th>
+                        <th className="py-3 px-4">Documento / Módulo</th>
+                        <th className="py-3 px-4">Sello Digital SHA-256</th>
                         <th className="py-3 px-4 text-right">Detalle</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#E2E7EE] font-mono">
+                    <tbody className="divide-y divide-[#E2E7EE]">
                       {auditLogs
                         .filter((log) => {
                           const term = auditSearchTerm.toLowerCase();
+                          const actionMeta = getFriendlyAction(log.action);
+                          const entityMeta = getFriendlyEntity(log.entity_name);
+                          const actorMeta = getFriendlyActor(log.actor_email);
+                          const tenantObj = tenants.find((t) => t.id === log.tenant_id);
+
                           const matchesSearch =
                             log.action.toLowerCase().includes(term) ||
+                            actionMeta.title.toLowerCase().includes(term) ||
+                            actionMeta.description.toLowerCase().includes(term) ||
+                            entityMeta.label.toLowerCase().includes(term) ||
+                            actorMeta.title.toLowerCase().includes(term) ||
                             log.actor_email.toLowerCase().includes(term) ||
                             log.entity_name.toLowerCase().includes(term) ||
+                            (tenantObj && tenantObj.name.toLowerCase().includes(term)) ||
                             (log.actor_ip && log.actor_ip.includes(term)) ||
                             log.current_event_hash.toLowerCase().includes(term);
                           const matchesTenant =
@@ -1108,33 +1123,54 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                         })
                         .map((log) => {
                           const tenantObj = tenants.find((t) => t.id === log.tenant_id);
+                          const actionMeta = getFriendlyAction(log.action);
+                          const entityMeta = getFriendlyEntity(log.entity_name);
+                          const actorMeta = getFriendlyActor(log.actor_email);
+
                           return (
                             <tr key={log.id} className="hover:bg-[#F8FAFC]/80 transition-colors">
-                              <td className="py-3 px-4 text-[#5B6B7F] whitespace-nowrap text-[11px]">
+                              <td className="py-3.5 px-4 text-[#5B6B7F] whitespace-nowrap text-[11px] font-medium">
                                 {new Date(log.created_at).toLocaleString('es-PE')}
                               </td>
-                              <td className="py-3 px-4 font-sans">
+                              <td className="py-3.5 px-4">
                                 {tenantObj ? (
                                   <span className="font-semibold text-[#0B2545]">{tenantObj.name}</span>
                                 ) : (
                                   <span className="text-[10px] text-[#9AA8BC] font-mono">{log.tenant_id.substring(0, 8)}...</span>
                                 )}
                               </td>
-                              <td className="py-3 px-4 font-sans font-medium text-[#0B2545]">
-                                {log.actor_email}
+                              <td className="py-3.5 px-4">
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-[#0B2545] text-xs leading-snug">
+                                    {actorMeta.title}
+                                  </span>
+                                  <span className="text-[10px] text-[#9AA8BC] truncate max-w-[160px]">
+                                    {actorMeta.subtitle}
+                                  </span>
+                                </div>
                               </td>
-                              <td className="py-3 px-4 font-sans">
-                                <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold text-[10px] border border-blue-200">
-                                  {log.action}
+                              <td className="py-3.5 px-4">
+                                <div className="flex flex-col gap-0.5 max-w-xs">
+                                  <span className={`w-max px-2 py-0.5 rounded text-[10px] font-bold border ${actionMeta.badgeBg} ${actionMeta.badgeText} ${actionMeta.badgeBorder}`}>
+                                    {actionMeta.title}
+                                  </span>
+                                  <span className="text-[10px] text-[#5B6B7F] truncate">
+                                    {actionMeta.description}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-semibold border ${entityMeta.badgeClass}`}>
+                                  {entityMeta.label}
                                 </span>
                               </td>
-                              <td className="py-3 px-4 text-[#5B6B7F] font-mono text-[11px]">
-                                {log.entity_name}
+                              <td className="py-3.5 px-4 font-mono text-[10px] text-[#0A7469]">
+                                <span className="inline-flex items-center gap-1">
+                                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>{log.current_event_hash?.substring(0, 16)}...</span>
+                                </span>
                               </td>
-                              <td className="py-3 px-4 font-mono text-[10px] text-[#0A7469]">
-                                {log.current_event_hash?.substring(0, 20)}...
-                              </td>
-                              <td className="py-3 px-4 text-right font-sans">
+                              <td className="py-3.5 px-4 text-right">
                                 <button
                                   onClick={() => setSelectedAuditLog(log)}
                                   className="px-2.5 py-1 rounded-lg border border-[#E2E7EE] bg-white text-[#0A7469] hover:bg-[#E8F4F2] font-semibold text-[11px] transition-colors"
@@ -1170,21 +1206,39 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
                     </div>
 
                     <div className="space-y-3 text-xs">
+                      {/* Resumen amigable */}
+                      <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200">
+                        <div className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider mb-1">
+                          {getFriendlyAction(selectedAuditLog.action).categoryLabel}
+                        </div>
+                        <h4 className="font-bold text-emerald-950 text-sm">
+                          {getFriendlyAction(selectedAuditLog.action).title}
+                        </h4>
+                        <p className="text-xs text-emerald-700 mt-0.5">
+                          {getFriendlyAction(selectedAuditLog.action).description}
+                        </p>
+                      </div>
+
                       <div className="p-3 bg-[#F8FAFC] rounded-xl border border-[#E2E7EE] grid grid-cols-2 gap-2">
                         <div>
-                          <span className="text-[10px] text-[#5B6B7F] block">ACCION</span>
-                          <span className="font-bold text-[#0B2545]">{selectedAuditLog.action}</span>
+                          <span className="text-[10px] text-[#5B6B7F] block">DOCUMENTO / MÓDULO</span>
+                          <span className="font-bold text-[#0B2545]">
+                            {getFriendlyEntity(selectedAuditLog.entity_name).label}
+                          </span>
                         </div>
                         <div>
                           <span className="text-[10px] text-[#5B6B7F] block">TIMESTAMP</span>
                           <span className="text-[#0B2545] font-mono">{new Date(selectedAuditLog.created_at).toLocaleString('es-PE')}</span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-[#5B6B7F] block">ACTOR</span>
-                          <span className="text-[#0B2545]">{selectedAuditLog.actor_email}</span>
+                          <span className="text-[10px] text-[#5B6B7F] block">RESPONSABLE</span>
+                          <span className="text-[#0B2545] font-medium">
+                            {getFriendlyActor(selectedAuditLog.actor_email).title}
+                          </span>
+                          <span className="text-[10px] text-[#9AA8BC] block truncate">{selectedAuditLog.actor_email}</span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-[#5B6B7F] block">IP</span>
+                          <span className="text-[10px] text-[#5B6B7F] block">IP DE ORIGEN</span>
                           <span className="text-[#0B2545] font-mono">{selectedAuditLog.actor_ip || '127.0.0.1 / Interno'}</span>
                         </div>
                       </div>
