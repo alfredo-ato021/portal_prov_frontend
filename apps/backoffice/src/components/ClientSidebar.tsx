@@ -26,7 +26,8 @@ export type ClientNavTab =
   | 'qualification'
   | 'policies'
   | 'integrations'
-  | 'users';
+  | 'users'
+  | 'audit_logs';
 
 interface ClientSidebarProps {
   currentTab: ClientNavTab;
@@ -46,7 +47,7 @@ export const ClientSidebar: React.FC<ClientSidebarProps> = ({
   onToggleCollapse,
   onLogout,
 }) => {
-  const isConfigTab = ['policies', 'integrations', 'users'].includes(currentTab);
+  const isConfigTab = ['policies', 'integrations', 'users', 'audit_logs'].includes(currentTab);
   const [isConfigOpen, setIsConfigOpen] = useState(true);
 
   // Auto-expand if active tab is in config
@@ -113,6 +114,12 @@ export const ClientSidebar: React.FC<ClientSidebarProps> = ({
       label: 'Gestión de Usuario',
       icon: UserCog,
       badge: null,
+    },
+    {
+      id: 'audit_logs' as ClientNavTab,
+      label: 'Logs & Auditoría',
+      icon: ShieldCheck,
+      badge: 'SHA-256',
     },
   ];
 

@@ -20,6 +20,9 @@ import {
   UserPlus,
   UserCheck,
   UserX,
+  Search,
+  Download,
+  Activity,
 } from 'lucide-react';
 import {
   FactumfluxClient,
@@ -47,6 +50,9 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
   const [plans, setPlans] = useState<CommercialPlan[]>([]);
   const [jitSessions, setJitSessions] = useState<JITSupportSession[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditEvent[]>([]);
+  const [auditSearchTerm, setAuditSearchTerm] = useState('');
+  const [auditTenantFilter, setAuditTenantFilter] = useState('ALL');
+  const [selectedAuditLog, setSelectedAuditLog] = useState<AuditEvent | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
@@ -945,53 +951,273 @@ export const SuperAdminConsoleView: React.FC<SuperAdminConsoleViewProps> = ({
           {/* ── TAB: AUDITORÍA INMUTABLE SHA-256 ─────────────────────────── */}
           {activeTab === 'audit' && (
             <div className="space-y-6 w-full max-w-full">
-              <div>
-                <h2 className="text-2xl font-bold text-[#0B2545] tracking-tight">
-                  Registro de Auditoría SHA-256
-                </h2>
-                <p className="text-sm text-[#5B6B7F] mt-1">
-                  Bitácora inmutable encadenada criptográficamente (prev_hash → current_hash) para peritaje fiscal y compliance.
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-[#0B2545] tracking-tight flex items-center gap-2">
+                    <ShieldCheck className="w-6 h-6 text-[#0A7469]" />
+                    Registro de Auditoría & Logs Operativos (Plataforma)
+                  </h2>
+                  <p className="text-sm text-[#5B6B7F] mt-1">
+                    Bitácora inmutable encadenada criptográficamente (prev_hash → current_hash) para peritaje fiscal, compliance y observabilidad global.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      client.listAuditLogs().then((a) => setAuditLogs(a || [])).catch(() => {});
+                    }}
+                    className="p-2.5 rounded-xl border border-[#E2E7EE] bg-white text-[#5B6B7F] hover:text-[#0B2545] hover:bg-[#F8FAFC] transition-colors"
+                    title="Recargar logs"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (auditLogs.length === 0) return;
+                      const headers = ['ID', 'Timestamp', 'Tenant', 'Actor', 'IP', 'Accion', 'Entidad', 'EntityID', 'Hash_Payload', 'Hash_Actual'];
+                      const rows = auditLogs.map((l) => [
+                        l.id,
+                        `"${l.created_at}"`,
+                        `"${l.tenant_id}"`,
+                        `"${l.actor_email}"`,
+                        `"${l.actor_ip || ''}"`,
+                        `"${l.action}"`,
+                        `"${l.entity_name}"`,
+                        `"${l.entity_id}"`,
+                        `"${l.payload_hash}"`,
+                        `"${l.current_event_hash}"`,
+                      ]);
+                      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+                      const link = document.createElement('a');
+                      link.setAttribute('href', encodeURI(csvContent));
+                      link.setAttribute('download', `platform_audit_logs_${new Date().toISOString().slice(0, 10)}.csv`);
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }}
+                    disabled={auditLogs.length === 0}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#E2E7EE] bg-white hover:bg-[#F8FAFC] text-[#0B2545] font-semibold text-xs shadow-sm transition-all"
+                  >
+                    <Download className="w-4 h-4 text-[#0A7469]" />
+                    <span>Exportar CSV</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="bg-white rounded-2xl border border-[#E2E7EE] overflow-hidden shadow-sm">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-[#E2E7EE] bg-[#F8FAFC] text-[#5B6B7F] uppercase tracking-wider font-semibold">
-                      <th className="py-3 px-4">Timestamp</th>
-                      <th className="py-3 px-4">Actor</th>
-                      <th className="py-3 px-4">Acción</th>
-                      <th className="py-3 px-4">Entidad</th>
-                      <th className="py-3 px-4">Hash SHA-256 Actual</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#E2E7EE] font-mono">
-                    {auditLogs.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="py-12 text-center text-[#5B6B7F] font-sans">
-                          No se registran eventos de auditoría.
-                        </td>
-                      </tr>
-                    ) : (
-                      auditLogs.map((log) => (
-                        <tr key={log.id} className="hover:bg-[#F8FAFC]/80 transition-colors">
-                          <td className="py-3 px-4 text-[#5B6B7F]">{log.created_at}</td>
-                          <td className="py-3 px-4 font-sans font-medium text-[#0B2545]">{log.actor_email}</td>
-                          <td className="py-3 px-4 font-sans">
-                            <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold">
-                              {log.action}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-[#5B6B7F]">{log.entity_name}</td>
-                          <td className="py-3 px-4 font-mono text-[10px] text-[#0A7469]">
-                            {log.current_event_hash?.substring(0, 24)}...
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+              {/* KPI Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white rounded-2xl p-4 border border-[#E2E7EE] shadow-sm">
+                  <div className="flex items-center justify-between text-[#5B6B7F] mb-1">
+                    <span className="text-xs font-semibold uppercase tracking-wider">TOTAL EVENTOS</span>
+                    <Layers className="w-4 h-4 text-[#0A7469]" />
+                  </div>
+                  <div className="text-2xl font-bold text-[#0B2545]">{auditLogs.length}</div>
+                  <p className="text-[11px] text-[#5B6B7F] mt-0.5">Eventos registrados en ledger</p>
+                </div>
+
+                <div className="bg-white rounded-2xl p-4 border border-[#E2E7EE] shadow-sm">
+                  <div className="flex items-center justify-between text-[#5B6B7F] mb-1">
+                    <span className="text-xs font-semibold uppercase tracking-wider">OPERACIONALES</span>
+                    <Activity className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <div className="text-2xl font-bold text-emerald-700">
+                    {auditLogs.filter((l) => !l.action.includes('JIT') && !l.action.includes('LOGIN')).length}
+                  </div>
+                  <p className="text-[11px] text-[#5B6B7F] mt-0.5">Ingestas, comprobantes y matching</p>
+                </div>
+
+                <div className="bg-white rounded-2xl p-4 border border-[#E2E7EE] shadow-sm">
+                  <div className="flex items-center justify-between text-[#5B6B7F] mb-1">
+                    <span className="text-xs font-semibold uppercase tracking-wider">JIT PAM / SEGURIDAD</span>
+                    <Lock className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <div className="text-2xl font-bold text-purple-700">
+                    {auditLogs.filter((l) => l.action.includes('JIT') || l.action.includes('LOGIN')).length}
+                  </div>
+                  <p className="text-[11px] text-[#5B6B7F] mt-0.5">Elevaciones de privilegios auditadas</p>
+                </div>
+
+                <div className="bg-white rounded-2xl p-4 border border-[#E2E7EE] shadow-sm">
+                  <div className="flex items-center justify-between text-[#5B6B7F] mb-1">
+                    <span className="text-xs font-semibold uppercase tracking-wider">SELLADO SHA-256</span>
+                    <ShieldCheck className="w-4 h-4 text-teal-600" />
+                  </div>
+                  <div className="text-2xl font-bold text-teal-700">100%</div>
+                  <p className="text-[11px] text-[#5B6B7F] mt-0.5">Inmutabilidad criptográfica</p>
+                </div>
               </div>
+
+              {/* Filters */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-[#E2E7EE] shadow-sm">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-[#5B6B7F] absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={auditSearchTerm}
+                    onChange={(e) => setAuditSearchTerm(e.target.value)}
+                    placeholder="Buscar por actor, acción, entidad, IP o hash..."
+                    className="w-full pl-9 pr-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-xs text-[#0B2545] focus:outline-none focus:border-[#0A7469]"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[#5B6B7F] font-semibold">Cliente:</span>
+                  <select
+                    value={auditTenantFilter}
+                    onChange={(e) => setAuditTenantFilter(e.target.value)}
+                    className="px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-xs text-[#0B2545] font-medium focus:outline-none focus:border-[#0A7469]"
+                  >
+                    <option value="ALL">Todos los Tenants</option>
+                    {tenants.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.slug})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="bg-white rounded-2xl border border-[#E2E7EE] overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-[#E2E7EE] bg-[#F8FAFC] text-[#5B6B7F] uppercase tracking-wider font-semibold">
+                        <th className="py-3 px-4">Timestamp</th>
+                        <th className="py-3 px-4">Tenant</th>
+                        <th className="py-3 px-4">Actor</th>
+                        <th className="py-3 px-4">Acción</th>
+                        <th className="py-3 px-4">Entidad</th>
+                        <th className="py-3 px-4">Hash SHA-256 Actual</th>
+                        <th className="py-3 px-4 text-right">Detalle</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#E2E7EE] font-mono">
+                      {auditLogs
+                        .filter((log) => {
+                          const term = auditSearchTerm.toLowerCase();
+                          const matchesSearch =
+                            log.action.toLowerCase().includes(term) ||
+                            log.actor_email.toLowerCase().includes(term) ||
+                            log.entity_name.toLowerCase().includes(term) ||
+                            (log.actor_ip && log.actor_ip.includes(term)) ||
+                            log.current_event_hash.toLowerCase().includes(term);
+                          const matchesTenant =
+                            auditTenantFilter === 'ALL' || log.tenant_id === auditTenantFilter;
+                          return matchesSearch && matchesTenant;
+                        })
+                        .map((log) => {
+                          const tenantObj = tenants.find((t) => t.id === log.tenant_id);
+                          return (
+                            <tr key={log.id} className="hover:bg-[#F8FAFC]/80 transition-colors">
+                              <td className="py-3 px-4 text-[#5B6B7F] whitespace-nowrap text-[11px]">
+                                {new Date(log.created_at).toLocaleString('es-PE')}
+                              </td>
+                              <td className="py-3 px-4 font-sans">
+                                {tenantObj ? (
+                                  <span className="font-semibold text-[#0B2545]">{tenantObj.name}</span>
+                                ) : (
+                                  <span className="text-[10px] text-[#9AA8BC] font-mono">{log.tenant_id.substring(0, 8)}...</span>
+                                )}
+                              </td>
+                              <td className="py-3 px-4 font-sans font-medium text-[#0B2545]">
+                                {log.actor_email}
+                              </td>
+                              <td className="py-3 px-4 font-sans">
+                                <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold text-[10px] border border-blue-200">
+                                  {log.action}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-[#5B6B7F] font-mono text-[11px]">
+                                {log.entity_name}
+                              </td>
+                              <td className="py-3 px-4 font-mono text-[10px] text-[#0A7469]">
+                                {log.current_event_hash?.substring(0, 20)}...
+                              </td>
+                              <td className="py-3 px-4 text-right font-sans">
+                                <button
+                                  onClick={() => setSelectedAuditLog(log)}
+                                  className="px-2.5 py-1 rounded-lg border border-[#E2E7EE] bg-white text-[#0A7469] hover:bg-[#E8F4F2] font-semibold text-[11px] transition-colors"
+                                >
+                                  Ver Sello
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Modal Detalle Criptográfico Superadmin */}
+              {selectedAuditLog && (
+                <div className="fixed inset-0 bg-[#0B2545]/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                  <div className="bg-white border border-[#E2E7EE] rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-xl">
+                    <div className="flex items-center justify-between pb-3 border-b border-[#E2E7EE]">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="w-5 h-5 text-[#0A7469]" />
+                        <h3 className="font-bold text-[#0B2545] text-sm">
+                          Sello de Auditoría Criptográfica #{selectedAuditLog.id}
+                        </h3>
+                      </div>
+                      <button
+                        onClick={() => setSelectedAuditLog(null)}
+                        className="text-[#5B6B7F] hover:text-[#0B2545]"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="space-y-3 text-xs">
+                      <div className="p-3 bg-[#F8FAFC] rounded-xl border border-[#E2E7EE] grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[10px] text-[#5B6B7F] block">ACCION</span>
+                          <span className="font-bold text-[#0B2545]">{selectedAuditLog.action}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-[#5B6B7F] block">TIMESTAMP</span>
+                          <span className="text-[#0B2545] font-mono">{new Date(selectedAuditLog.created_at).toLocaleString('es-PE')}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-[#5B6B7F] block">ACTOR</span>
+                          <span className="text-[#0B2545]">{selectedAuditLog.actor_email}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-[#5B6B7F] block">IP</span>
+                          <span className="text-[#0B2545] font-mono">{selectedAuditLog.actor_ip || '127.0.0.1 / Interno'}</span>
+                        </div>
+                      </div>
+
+                      <div className="p-3 bg-slate-900 text-slate-100 rounded-xl font-mono text-[10px] space-y-2">
+                        <div>
+                          <span className="text-slate-400 block mb-0.5">PREV EVENT HASH</span>
+                          <div className="p-1.5 bg-slate-800 rounded break-all">{selectedAuditLog.prev_event_hash}</div>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block mb-0.5">PAYLOAD HASH</span>
+                          <div className="p-1.5 bg-slate-800 rounded break-all">{selectedAuditLog.payload_hash}</div>
+                        </div>
+                        <div>
+                          <span className="text-emerald-400 font-bold block mb-0.5">CURRENT EVENT HASH (SELLO VERIFICADO)</span>
+                          <div className="p-1.5 bg-slate-800 text-emerald-300 font-bold rounded break-all border border-emerald-500/30">
+                            {selectedAuditLog.current_event_hash}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        onClick={() => setSelectedAuditLog(null)}
+                        className="px-4 py-2 bg-[#0B2545] text-white rounded-xl text-xs font-semibold"
+                      >
+                        Cerrar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </main>

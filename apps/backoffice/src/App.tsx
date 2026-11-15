@@ -26,6 +26,7 @@ import { ClientSuppliersView } from './components/ClientSuppliersView';
 import { ClientIntegrationsView } from './components/ClientIntegrationsView';
 import { ClientQualificationView } from './components/ClientQualificationView';
 import { ClientUsersView } from './components/ClientUsersView';
+import { ClientAuditLogsView } from './components/ClientAuditLogsView';
 import { SuperAdminConsoleView } from './components/SuperAdminConsoleView';
 import { PurchaseOrderDetailModal } from './components/PurchaseOrderDetailModal';
 import { SystemModal, SystemModalType } from '@factumflux/ui';
@@ -808,6 +809,15 @@ export default function App() {
           {/* User Management Tab */}
           {currentTab === 'users' && (
             <ClientUsersView
+              client={client}
+              tenantId={tenantInfo.tenantId}
+              tenantName={tenantInfo.tenantName}
+            />
+          )}
+
+          {/* Audit & System Logs Tab */}
+          {currentTab === 'audit_logs' && (
+            <ClientAuditLogsView
               client={client}
               tenantId={tenantInfo.tenantId}
               tenantName={tenantInfo.tenantName}

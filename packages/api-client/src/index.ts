@@ -395,11 +395,19 @@ export interface AuditEvent {
   actor_email: string;
   actor_ip?: string;
   action: string;
+  category?: 'OPERATIONAL' | 'SYSTEM' | 'SECURITY' | 'COMPLIANCE' | string;
   entity_name: string;
   entity_id: string;
   payload_hash: string;
   prev_event_hash: string;
   current_event_hash: string;
+}
+
+export interface AuditLogFilter {
+  limit?: number;
+  tenant_id?: string;
+  action?: string;
+  search?: string;
 }
 
 export interface ApiClientConfig {
@@ -964,8 +972,23 @@ export class FactumfluxClient {
     });
   }
 
-  async listAuditLogs(): Promise<AuditEvent[]> {
-    return this.fetch('/api/admin/audit-logs');
+  async listAuditLogs(filter?: AuditLogFilter): Promise<AuditEvent[]> {
+    const params = new URLSearchParams();
+    if (filter?.limit) params.set('limit', String(filter.limit));
+    if (filter?.tenant_id) params.set('tenant_id', filter.tenant_id);
+    if (filter?.action) params.set('action', filter.action);
+    if (filter?.search) params.set('search', filter.search);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return this.fetch(`/api/admin/audit-logs${query}`);
+  }
+
+  async listClientAuditLogs(filter?: AuditLogFilter): Promise<AuditEvent[]> {
+    const params = new URLSearchParams();
+    if (filter?.limit) params.set('limit', String(filter.limit));
+    if (filter?.action) params.set('action', filter.action);
+    if (filter?.search) params.set('search', filter.search);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return this.fetch(`/api/v1/backoffice/audit-logs${query}`);
   }
 
   // BackOffice Client endpoints
