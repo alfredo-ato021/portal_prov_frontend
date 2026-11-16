@@ -10,9 +10,12 @@ import {
   RefreshCw,
   Download,
   CalendarCheck,
-  Search,
   ChevronLeft,
   ChevronRight,
+  Calendar,
+  RotateCcw,
+  Building2,
+  Hash,
 } from 'lucide-react';
 import {
   FactumfluxClient,
@@ -90,7 +93,10 @@ export default function App() {
   const [invoices, setInvoices] = useState<InvoiceSummary[]>([]);
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [selectedPOId, setSelectedPOId] = useState<string | null>(null);
-  const [poSearchTerm, setPoSearchTerm] = useState('');
+  const [poDocNumberFilter, setPoDocNumberFilter] = useState('');
+  const [poSupplierFilter, setPoSupplierFilter] = useState('');
+  const [poDateFrom, setPoDateFrom] = useState('');
+  const [poDateTo, setPoDateTo] = useState('');
   const [poTypeFilter, setPoTypeFilter] = useState<'ALL' | 'BIEN' | 'SERVICIO'>('ALL');
   const [poCurrentPage, setPoCurrentPage] = useState(1);
   const [poPageSize, setPoPageSize] = useState(10);
@@ -345,18 +351,39 @@ export default function App() {
 
   // BackOffice Purchase Orders Filtering & Pagination
   const filteredBackofficeOrders = orders.filter((po) => {
-    const q = poSearchTerm.trim().toLowerCase();
-    const matchesQuery =
-      !q ||
-      po.po_number.toLowerCase().includes(q) ||
-      (po.supplier_name && po.supplier_name.toLowerCase().includes(q)) ||
-      (po.supplier_ruc && po.supplier_ruc.includes(q)) ||
-      (po.order_type && po.order_type.toLowerCase().includes(q));
+    // 1. Filtro por número de documento (OC, OS, MIGO, HES o ERP reference)
+    if (poDocNumberFilter.trim()) {
+      const docTerm = poDocNumberFilter.trim().toLowerCase();
+      const matchDoc =
+        po.po_number.toLowerCase().includes(docTerm) ||
+        (po.reception_doc && po.reception_doc.toLowerCase().includes(docTerm)) ||
+        (po.erp_reference && po.erp_reference.toLowerCase().includes(docTerm));
+      if (!matchDoc) return false;
+    }
 
-    const matchesType =
-      poTypeFilter === 'ALL' || po.order_type === poTypeFilter;
+    // 2. Filtro por Proveedor (Razón Social o RUC)
+    if (poSupplierFilter.trim()) {
+      const suppTerm = poSupplierFilter.trim().toLowerCase();
+      const matchSupplier =
+        (po.supplier_name && po.supplier_name.toLowerCase().includes(suppTerm)) ||
+        (po.supplier_ruc && po.supplier_ruc.toLowerCase().includes(suppTerm));
+      if (!matchSupplier) return false;
+    }
 
-    return matchesQuery && matchesType;
+    // 3. Filtro por Fecha Emisión (Desde / Hasta)
+    if (poDateFrom) {
+      if (!po.issue_date || po.issue_date < poDateFrom) return false;
+    }
+    if (poDateTo) {
+      if (!po.issue_date || po.issue_date > poDateTo) return false;
+    }
+
+    // 4. Filtro por Tipo de Orden
+    if (poTypeFilter !== 'ALL') {
+      if (po.order_type !== poTypeFilter) return false;
+    }
+
+    return true;
   });
 
   const totalBackofficeFiltered = filteredBackofficeOrders.length;
@@ -675,48 +702,156 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Filter and Search Bar */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-[#E2E7EE] shadow-sm">
-                <div className="relative flex-1">
-                  <Search className="w-4 h-4 text-[#5B6B7F] absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={poSearchTerm}
-                    onChange={(e) => {
-                      setPoSearchTerm(e.target.value);
-                      setPoCurrentPage(1);
-                    }}
-                    placeholder="Buscar por número de orden, RUC o razón social del proveedor..."
-                    className="w-full pl-9 pr-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-xs text-[#0B2545] focus:outline-none focus:border-[#0A7469]"
-                  />
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-[#5B6B7F] font-semibold">Tipo:</span>
-                    <select
-                      value={poTypeFilter}
-                      onChange={(e) => {
-                        setPoTypeFilter(e.target.value as any);
-                        setPoCurrentPage(1);
-                      }}
-                      className="px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-xs text-[#0B2545] font-medium focus:outline-none focus:border-[#0A7469]"
-                    >
-                      <option value="ALL">Todos ({orders.length})</option>
-                      <option value="BIEN">Bienes / OC ({orders.filter((o) => o.order_type === 'BIEN').length})</option>
-                      <option value="SERVICIO">Servicios / OS ({orders.filter((o) => o.order_type === 'SERVICIO').length})</option>
-                    </select>
+              {/* Filter and Search Panel */}
+              <div className="bg-white p-4 rounded-2xl border border-[#E2E7EE] shadow-sm space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {/* Filtro por N° Documento */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#5B6B7F] uppercase tracking-wider mb-1">
+                      N° Documento (OC / OS / MIGO)
+                    </label>
+                    <div className="relative">
+                      <Hash className="w-4 h-4 text-[#5B6B7F] absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={poDocNumberFilter}
+                        onChange={(e) => {
+                          setPoDocNumberFilter(e.target.value);
+                          setPoCurrentPage(1);
+                        }}
+                        placeholder="Ej: OC-2026-035..."
+                        className="w-full pl-9 pr-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-xs text-[#0B2545] font-mono focus:outline-none focus:border-[#0A7469]"
+                      />
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-[#5B6B7F] font-semibold">Mostrar:</span>
+                  {/* Filtro por Proveedor */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#5B6B7F] uppercase tracking-wider mb-1">
+                      Proveedor (RUC o Razón Social)
+                    </label>
+                    <div className="relative">
+                      <Building2 className="w-4 h-4 text-[#5B6B7F] absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={poSupplierFilter}
+                        onChange={(e) => {
+                          setPoSupplierFilter(e.target.value);
+                          setPoCurrentPage(1);
+                        }}
+                        placeholder="Buscar por RUC o empresa..."
+                        className="w-full pl-9 pr-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-xs text-[#0B2545] focus:outline-none focus:border-[#0A7469]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Filtro por Fecha Emisión (Desde) */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#5B6B7F] uppercase tracking-wider mb-1">
+                      Fecha Emisión (Desde)
+                    </label>
+                    <div className="relative">
+                      <Calendar className="w-4 h-4 text-[#5B6B7F] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="date"
+                        value={poDateFrom}
+                        onChange={(e) => {
+                          setPoDateFrom(e.target.value);
+                          setPoCurrentPage(1);
+                        }}
+                        className="w-full pl-9 pr-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-xs text-[#0B2545] focus:outline-none focus:border-[#0A7469]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Filtro por Fecha Emisión (Hasta) */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#5B6B7F] uppercase tracking-wider mb-1">
+                      Fecha Emisión (Hasta)
+                    </label>
+                    <div className="relative">
+                      <Calendar className="w-4 h-4 text-[#5B6B7F] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="date"
+                        value={poDateTo}
+                        onChange={(e) => {
+                          setPoDateTo(e.target.value);
+                          setPoCurrentPage(1);
+                        }}
+                        className="w-full pl-9 pr-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-xs text-[#0B2545] focus:outline-none focus:border-[#0A7469]"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sub-barra: Selector de Tipo, Tamaño de Página y Limpiar */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-[#E2E7EE]/60 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-[#5B6B7F] font-semibold">Tipo:</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => { setPoTypeFilter('ALL'); setPoCurrentPage(1); }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          poTypeFilter === 'ALL'
+                            ? 'bg-[#0A7469] text-white shadow-xs'
+                            : 'bg-[#F8FAFC] text-[#5B6B7F] hover:bg-[#E8F4F2] border border-[#E2E7EE]'
+                        }`}
+                      >
+                        Todos ({orders.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setPoTypeFilter('BIEN'); setPoCurrentPage(1); }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          poTypeFilter === 'BIEN'
+                            ? 'bg-[#0A7469] text-white shadow-xs'
+                            : 'bg-[#F8FAFC] text-[#5B6B7F] hover:bg-[#E8F4F2] border border-[#E2E7EE]'
+                        }`}
+                      >
+                        Bienes ({orders.filter((o) => o.order_type === 'BIEN').length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setPoTypeFilter('SERVICIO'); setPoCurrentPage(1); }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          poTypeFilter === 'SERVICIO'
+                            ? 'bg-[#0A7469] text-white shadow-xs'
+                            : 'bg-[#F8FAFC] text-[#5B6B7F] hover:bg-[#E8F4F2] border border-[#E2E7EE]'
+                        }`}
+                      >
+                        Servicios ({orders.filter((o) => o.order_type === 'SERVICIO').length})
+                      </button>
+                    </div>
+
+                    {(poDocNumberFilter || poSupplierFilter || poDateFrom || poDateTo || poTypeFilter !== 'ALL') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPoDocNumberFilter('');
+                          setPoSupplierFilter('');
+                          setPoDateFrom('');
+                          setPoDateTo('');
+                          setPoTypeFilter('ALL');
+                          setPoCurrentPage(1);
+                        }}
+                        className="flex items-center gap-1 text-[11px] text-rose-600 hover:text-rose-800 font-semibold ml-2 underline cursor-pointer"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Limpiar filtros</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[#5B6B7F] font-semibold">Mostrar:</span>
                     <select
                       value={poPageSize}
                       onChange={(e) => {
                         setPoPageSize(Number(e.target.value));
                         setPoCurrentPage(1);
                       }}
-                      className="px-2.5 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-xs text-[#0B2545] font-medium focus:outline-none focus:border-[#0A7469]"
+                      className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-xs text-[#0B2545] font-semibold focus:outline-none focus:border-[#0A7469]"
                     >
                       <option value={10}>10 por pág.</option>
                       <option value={20}>20 por pág.</option>
