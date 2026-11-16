@@ -16,6 +16,8 @@ import {
   RefreshCw,
   Clock,
   AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   FactumfluxClient,
@@ -48,6 +50,10 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
   const [isLoadingOrders, setIsLoadingOrders] = useState(true);
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [orderFilter, setOrderFilter] = useState('');
+  const [orderTypeFilter, setOrderTypeFilter] = useState<'ALL' | 'BIEN' | 'SERVICIO'>('ALL');
+  const [orderReceptionFilter, setOrderReceptionFilter] = useState<'ALL' | 'READY' | 'PENDING'>('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
   const [showManualSearch, setShowManualSearch] = useState(false);
 
   // Step 1 Manual Lookup
@@ -150,15 +156,37 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
     setStep(2);
   };
 
+  // Contadores globales de órdenes
+  const totalOrdersCount = orders.length;
+  const bienesCount = orders.filter((o) => o.order_type === 'BIEN').length;
+  const serviciosCount = orders.filter((o) => o.order_type === 'SERVICIO').length;
+  const readyCount = orders.filter((o) => o.can_upload_invoice).length;
+
   const filteredOrders = orders.filter((o) => {
     const q = orderFilter.trim().toLowerCase();
-    if (!q) return true;
-    return (
+    const matchesQuery =
+      !q ||
       o.po_number.toLowerCase().includes(q) ||
       o.order_type.toLowerCase().includes(q) ||
-      (o.reception_doc && o.reception_doc.toLowerCase().includes(q))
-    );
+      (o.reception_doc && o.reception_doc.toLowerCase().includes(q));
+
+    const matchesType =
+      orderTypeFilter === 'ALL' || o.order_type === orderTypeFilter;
+
+    const matchesReception =
+      orderReceptionFilter === 'ALL' ||
+      (orderReceptionFilter === 'READY' && o.can_upload_invoice) ||
+      (orderReceptionFilter === 'PENDING' && !o.can_upload_invoice);
+
+    return matchesQuery && matchesType && matchesReception;
   });
+
+  const totalFiltered = filteredOrders.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (safeCurrentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalFiltered);
+  const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
 
   // Document Type to Upload: '01' (Factura Electrónica) | '02' (Recibo por Honorarios Electrónico)
   const [docTypeToUpload, setDocTypeToUpload] = useState<'01' | '02'>('01');
@@ -765,14 +793,87 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
             </div>
           </div>
 
-          {/* Quick Filter Bar */}
+          {/* Quick Filter & Category Chips */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => { setOrderTypeFilter('ALL'); setOrderReceptionFilter('ALL'); setCurrentPage(1); }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  orderTypeFilter === 'ALL' && orderReceptionFilter === 'ALL'
+                    ? 'bg-[#0A7469] text-white shadow-xs'
+                    : 'bg-[#F8FAFC] text-[#5B6B7F] hover:bg-[#E8F4F2] hover:text-[#0A7469] border border-[#E2E7EE]'
+                }`}
+              >
+                Todas ({totalOrdersCount})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setOrderTypeFilter('BIEN'); setOrderReceptionFilter('ALL'); setCurrentPage(1); }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  orderTypeFilter === 'BIEN' && orderReceptionFilter === 'ALL'
+                    ? 'bg-[#0A7469] text-white shadow-xs'
+                    : 'bg-[#F8FAFC] text-[#5B6B7F] hover:bg-[#E8F4F2] hover:text-[#0A7469] border border-[#E2E7EE]'
+                }`}
+              >
+                Bienes / OC ({bienesCount})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setOrderTypeFilter('SERVICIO'); setOrderReceptionFilter('ALL'); setCurrentPage(1); }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  orderTypeFilter === 'SERVICIO' && orderReceptionFilter === 'ALL'
+                    ? 'bg-[#0A7469] text-white shadow-xs'
+                    : 'bg-[#F8FAFC] text-[#5B6B7F] hover:bg-[#E8F4F2] hover:text-[#0A7469] border border-[#E2E7EE]'
+                }`}
+              >
+                Servicios / OS ({serviciosCount})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setOrderReceptionFilter(orderReceptionFilter === 'READY' ? 'ALL' : 'READY'); setCurrentPage(1); }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  orderReceptionFilter === 'READY'
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
+                }`}
+              >
+                Listas para Facturar ({readyCount})
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs text-[#5B6B7F]">
+              <span className="font-medium">Mostrar:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E7EE] rounded-lg text-xs text-[#0B2545] font-semibold focus:outline-none focus:border-[#0A7469]"
+              >
+                <option value={5}>5 por pág.</option>
+                <option value={10}>10 por pág.</option>
+                <option value={20}>20 por pág.</option>
+                <option value={50}>50 por pág.</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Quick Filter Search Bar */}
           <div className="relative">
             <Search className="w-4 h-4 text-[#5B6B7F] absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={orderFilter}
-              onChange={(e) => setOrderFilter(e.target.value)}
-              placeholder="Filtrar por número de orden (OC / OS) o tipo..."
+              onChange={(e) => {
+                setOrderFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              placeholder="Buscar por número de orden (OC / OS), tipo o documento..."
               className="w-full pl-10 pr-4 py-2.5 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-xs text-[#0B2545] placeholder-[#5B6B7F] focus:outline-none focus:ring-2 focus:ring-[#0A7469]"
             />
           </div>
@@ -791,110 +892,187 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
               </button>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-[#E2E7EE]">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[#F8FAFC] text-[#5B6B7F] uppercase tracking-wider font-semibold border-b border-[#E2E7EE]">
-                  <tr>
-                    <th className="py-3 px-4">Orden / Tipo</th>
-                    <th className="py-3 px-4">Fecha Emisión</th>
-                    <th className="py-3 px-4 text-right">Importe Total</th>
-                    <th className="py-3 px-4">Estado Recepción ERP</th>
-                    <th className="py-3 px-4 text-center">Acción</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#E2E7EE] bg-white">
-                  {filteredOrders.length === 0 ? (
+            <div className="space-y-3">
+              <div className="overflow-x-auto rounded-xl border border-[#E2E7EE]">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#F8FAFC] text-[#5B6B7F] uppercase tracking-wider font-semibold border-b border-[#E2E7EE]">
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-[#5B6B7F]">
-                        No se encontraron órdenes de compra o servicio abiertas para su empresa.
-                      </td>
+                      <th className="py-3 px-4">Orden / Tipo</th>
+                      <th className="py-3 px-4">Fecha Emisión</th>
+                      <th className="py-3 px-4 text-right">Importe Total</th>
+                      <th className="py-3 px-4">Estado Recepción ERP</th>
+                      <th className="py-3 px-4 text-center">Acción</th>
                     </tr>
-                  ) : (
-                    filteredOrders.map((ord) => (
-                      <tr
-                        key={ord.po_id || ord.po_number}
-                        onClick={() => handleSelectOrder(ord)}
-                        className={`transition-colors cursor-pointer ${
-                          ord.can_upload_invoice
-                            ? 'hover:bg-[#E8F4F2]/50'
-                            : 'hover:bg-[#FFF9F5] opacity-90'
-                        }`}
-                      >
-                        <td className="py-3.5 px-4">
-                          <div className="font-mono font-bold text-[#0B2545] text-sm">
-                            {ord.po_number}
-                          </div>
-                          <span
-                            className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase mt-0.5 ${
-                              ord.order_type === 'BIEN'
-                                ? 'bg-[#E8F4F2] text-[#0A7469]'
-                                : 'bg-[#EFF8FF] text-[#175CD3]'
-                            }`}
-                          >
-                            {ord.order_type}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 text-[#5B6B7F]">
-                          {ord.issue_date || '-'}
-                        </td>
-                        <td className="py-3.5 px-4 text-right font-semibold text-[#0B2545]">
-                          {ord.currency === 'PEN' ? 'S/' : '$'}{' '}
-                          {Number(ord.total_amount).toLocaleString('es-PE', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          {ord.has_reception ? (
-                            <div className="flex flex-col gap-0.5">
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#E7F5EC] text-[#176B3F] border border-[#176B3F]/20 w-fit">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                {ord.reception_type === 'GR_MIGO'
-                                  ? 'Entrada Registrada (GR)'
-                                  : 'Conformidad Aprobada (HES)'}
-                              </span>
-                              {ord.reception_doc && (
-                                <span className="text-[11px] font-mono text-[#5B6B7F]">
-                                  Doc: {ord.reception_doc}
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#FFFAEB] text-[#B54708] border border-[#B54708]/20 w-fit">
-                              <Clock className="w-3.5 h-3.5" />
-                              {ord.order_type === 'BIEN'
-                                ? 'Sin Entrada de Mercancías'
-                                : 'Sin Conformidad de Servicio'}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 text-center">
-                          {ord.can_upload_invoice ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSelectOrder(ord);
-                              }}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#0A7469] hover:bg-[#075A52] text-white font-semibold text-xs transition-all shadow-sm shadow-[#0A7469]/20"
-                            >
-                              Cargar Factura
-                              <ArrowRight className="w-3.5 h-3.5" />
-                            </button>
-                          ) : (
-                            <span
-                              className="text-[11px] text-[#B54708] font-medium"
-                              title="Requiere que el cliente registre la recepción o conformidad antes de facturar"
-                            >
-                              Pendiente ERP
-                            </span>
-                          )}
+                  </thead>
+                  <tbody className="divide-y divide-[#E2E7EE] bg-white">
+                    {filteredOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-[#5B6B7F]">
+                          No se encontraron órdenes de compra o servicio que coincidan con los filtros aplicados.
                         </td>
                       </tr>
-                    ))
+                    ) : (
+                      paginatedOrders.map((ord) => (
+                        <tr
+                          key={ord.po_id || ord.po_number}
+                          onClick={() => handleSelectOrder(ord)}
+                          className={`transition-colors cursor-pointer ${
+                            ord.can_upload_invoice
+                              ? 'hover:bg-[#E8F4F2]/50'
+                              : 'hover:bg-[#FFF9F5] opacity-90'
+                          }`}
+                        >
+                          <td className="py-3.5 px-4">
+                            <div className="font-mono font-bold text-[#0B2545] text-sm">
+                              {ord.po_number}
+                            </div>
+                            <span
+                              className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase mt-0.5 ${
+                                ord.order_type === 'BIEN'
+                                  ? 'bg-[#E8F4F2] text-[#0A7469]'
+                                  : 'bg-[#EFF8FF] text-[#175CD3]'
+                              }`}
+                            >
+                              {ord.order_type}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-[#5B6B7F]">
+                            {ord.issue_date || '-'}
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-semibold text-[#0B2545]">
+                            {ord.currency === 'PEN' ? 'S/' : '$'}{' '}
+                            {Number(ord.total_amount).toLocaleString('es-PE', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            {ord.has_reception ? (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#E7F5EC] text-[#176B3F] border border-[#176B3F]/20 w-fit">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  {ord.reception_type === 'GR_MIGO'
+                                    ? 'Entrada Registrada (GR)'
+                                    : 'Conformidad Aprobada (HES)'}
+                                </span>
+                                {ord.reception_doc && (
+                                  <span className="text-[11px] font-mono text-[#5B6B7F]">
+                                    Doc: {ord.reception_doc}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#FFFAEB] text-[#B54708] border border-[#B54708]/20 w-fit">
+                                <Clock className="w-3.5 h-3.5" />
+                                {ord.order_type === 'BIEN'
+                                  ? 'Sin Entrada de Mercancías'
+                                  : 'Sin Conformidad de Servicio'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            {ord.can_upload_invoice ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectOrder(ord);
+                                }}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#0A7469] hover:bg-[#075A52] text-white font-semibold text-xs transition-all shadow-sm shadow-[#0A7469]/20"
+                              >
+                                Cargar Factura
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <span
+                                className="text-[11px] text-[#B54708] font-medium"
+                                title="Requiere que el cliente registre la recepción o conformidad antes de facturar"
+                              >
+                                Pendiente ERP
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Controls */}
+              {totalFiltered > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-2 py-2 text-xs text-[#5B6B7F]">
+                  <div>
+                    Mostrando del <span className="font-bold text-[#0B2545]">{startIndex + 1}</span> al{' '}
+                    <span className="font-bold text-[#0B2545]">{endIndex}</span> de{' '}
+                    <span className="font-bold text-[#0B2545]">{totalFiltered}</span> documentos
+                    {totalFiltered !== totalOrdersCount && (
+                      <span className="text-[#9AA8BC] ml-1">
+                        (filtrados de {totalOrdersCount} en total)
+                      </span>
+                    )}
+                  </div>
+
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={safeCurrentPage === 1}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#E2E7EE] bg-white text-[#5B6B7F] hover:bg-[#F8FAFC] hover:text-[#0B2545] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                        <span>Anterior</span>
+                      </button>
+
+                      <div className="flex items-center gap-1 px-1">
+                        {Array.from({ length: totalPages }, (_, i) => i + 1)
+                          .filter((page) => {
+                            // Show first, last, current, and pages around current
+                            return (
+                              page === 1 ||
+                              page === totalPages ||
+                              Math.abs(page - safeCurrentPage) <= 1
+                            );
+                          })
+                          .map((page, idx, arr) => {
+                            const prev = arr[idx - 1];
+                            const showEllipsis = prev && page - prev > 1;
+
+                            return (
+                              <React.Fragment key={page}>
+                                {showEllipsis && (
+                                  <span className="px-1 text-[#9AA8BC]">...</span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => setCurrentPage(page)}
+                                  className={`w-7 h-7 rounded-lg text-xs font-semibold transition-colors ${
+                                    safeCurrentPage === page
+                                      ? 'bg-[#0A7469] text-white'
+                                      : 'bg-white border border-[#E2E7EE] text-[#5B6B7F] hover:bg-[#F8FAFC] hover:text-[#0B2545]'
+                                  }`}
+                                >
+                                  {page}
+                                </button>
+                              </React.Fragment>
+                            );
+                          })}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={safeCurrentPage === totalPages}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#E2E7EE] bg-white text-[#5B6B7F] hover:bg-[#F8FAFC] hover:text-[#0B2545] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <span>Siguiente</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   )}
-                </tbody>
-              </table>
+                </div>
+              )}
             </div>
           )}
 

@@ -10,6 +10,9 @@ import {
   RefreshCw,
   Download,
   CalendarCheck,
+  Search,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   FactumfluxClient,
@@ -87,6 +90,10 @@ export default function App() {
   const [invoices, setInvoices] = useState<InvoiceSummary[]>([]);
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [selectedPOId, setSelectedPOId] = useState<string | null>(null);
+  const [poSearchTerm, setPoSearchTerm] = useState('');
+  const [poTypeFilter, setPoTypeFilter] = useState<'ALL' | 'BIEN' | 'SERVICIO'>('ALL');
+  const [poCurrentPage, setPoCurrentPage] = useState(1);
+  const [poPageSize, setPoPageSize] = useState(10);
   const [policy, setPolicy] = useState<TenantPolicy | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -335,6 +342,29 @@ export default function App() {
       />
     );
   }
+
+  // BackOffice Purchase Orders Filtering & Pagination
+  const filteredBackofficeOrders = orders.filter((po) => {
+    const q = poSearchTerm.trim().toLowerCase();
+    const matchesQuery =
+      !q ||
+      po.po_number.toLowerCase().includes(q) ||
+      (po.supplier_name && po.supplier_name.toLowerCase().includes(q)) ||
+      (po.supplier_ruc && po.supplier_ruc.includes(q)) ||
+      (po.order_type && po.order_type.toLowerCase().includes(q));
+
+    const matchesType =
+      poTypeFilter === 'ALL' || po.order_type === poTypeFilter;
+
+    return matchesQuery && matchesType;
+  });
+
+  const totalBackofficeFiltered = filteredBackofficeOrders.length;
+  const totalBackofficePages = Math.max(1, Math.ceil(totalBackofficeFiltered / poPageSize));
+  const safePoCurrentPage = Math.min(Math.max(1, poCurrentPage), totalBackofficePages);
+  const poStartIndex = (safePoCurrentPage - 1) * poPageSize;
+  const poEndIndex = Math.min(poStartIndex + poPageSize, totalBackofficeFiltered);
+  const paginatedBackofficeOrders = filteredBackofficeOrders.slice(poStartIndex, poEndIndex);
 
   // 3. Isolated SuperAdmin Platform Console
   if (authMode === 'superadmin_portal') {
@@ -645,6 +675,57 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Filter and Search Bar */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-[#E2E7EE] shadow-sm">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-[#5B6B7F] absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={poSearchTerm}
+                    onChange={(e) => {
+                      setPoSearchTerm(e.target.value);
+                      setPoCurrentPage(1);
+                    }}
+                    placeholder="Buscar por número de orden, RUC o razón social del proveedor..."
+                    className="w-full pl-9 pr-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-xs text-[#0B2545] focus:outline-none focus:border-[#0A7469]"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-[#5B6B7F] font-semibold">Tipo:</span>
+                    <select
+                      value={poTypeFilter}
+                      onChange={(e) => {
+                        setPoTypeFilter(e.target.value as any);
+                        setPoCurrentPage(1);
+                      }}
+                      className="px-3 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-xs text-[#0B2545] font-medium focus:outline-none focus:border-[#0A7469]"
+                    >
+                      <option value="ALL">Todos ({orders.length})</option>
+                      <option value="BIEN">Bienes / OC ({orders.filter((o) => o.order_type === 'BIEN').length})</option>
+                      <option value="SERVICIO">Servicios / OS ({orders.filter((o) => o.order_type === 'SERVICIO').length})</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-[#5B6B7F] font-semibold">Mostrar:</span>
+                    <select
+                      value={poPageSize}
+                      onChange={(e) => {
+                        setPoPageSize(Number(e.target.value));
+                        setPoCurrentPage(1);
+                      }}
+                      className="px-2.5 py-2 bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl text-xs text-[#0B2545] font-medium focus:outline-none focus:border-[#0A7469]"
+                    >
+                      <option value={10}>10 por pág.</option>
+                      <option value={20}>20 por pág.</option>
+                      <option value={50}>50 por pág.</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               {/* Purchase Orders Table */}
               <div className="bg-white rounded-2xl border border-[#E2E7EE] overflow-hidden shadow-sm text-xs">
                 <table className="w-full text-left">
@@ -661,14 +742,14 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E2E7EE] text-[#0B2545]">
-                    {orders.length === 0 ? (
+                    {filteredBackofficeOrders.length === 0 ? (
                       <tr>
                         <td colSpan={8} className="py-12 text-center text-[#5B6B7F]">
-                          No hay órdenes de compra registradas. Utilice "Ingesta Masiva" o descargue la plantilla Excel (.xlsx).
+                          No se encontraron órdenes de compra o servicio coincidentes.
                         </td>
                       </tr>
                     ) : (
-                      orders.map((po) => (
+                      paginatedBackofficeOrders.map((po) => (
                         <tr
                           key={po.id}
                           onClick={() => setSelectedPOId(po.id || po.po_number)}
@@ -776,6 +857,78 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
+
+              {/* BackOffice Pagination Controls */}
+              {totalBackofficeFiltered > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-2 py-2 text-xs text-[#5B6B7F]">
+                  <div>
+                    Mostrando del <span className="font-bold text-[#0B2545]">{poStartIndex + 1}</span> al{' '}
+                    <span className="font-bold text-[#0B2545]">{poEndIndex}</span> de{' '}
+                    <span className="font-bold text-[#0B2545]">{totalBackofficeFiltered}</span> órdenes
+                    {totalBackofficeFiltered !== orders.length && (
+                      <span className="text-[#9AA8BC] ml-1">
+                        (filtradas de {orders.length} en total)
+                      </span>
+                    )}
+                  </div>
+
+                  {totalBackofficePages > 1 && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setPoCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={safePoCurrentPage === 1}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#E2E7EE] bg-white text-[#5B6B7F] hover:bg-[#F8FAFC] hover:text-[#0B2545] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                        <span>Anterior</span>
+                      </button>
+
+                      <div className="flex items-center gap-1 px-1">
+                        {Array.from({ length: totalBackofficePages }, (_, i) => i + 1)
+                          .filter((page) => {
+                            return (
+                              page === 1 ||
+                              page === totalBackofficePages ||
+                              Math.abs(page - safePoCurrentPage) <= 1
+                            );
+                          })
+                          .map((page, idx, arr) => {
+                            const prev = arr[idx - 1];
+                            const showEllipsis = prev && page - prev > 1;
+
+                            return (
+                              <div key={page} className="flex items-center">
+                                {showEllipsis && <span className="px-1 text-[#9AA8BC]">...</span>}
+                                <button
+                                  type="button"
+                                  onClick={() => setPoCurrentPage(page)}
+                                  className={`w-7 h-7 rounded-lg text-xs font-semibold transition-colors ${
+                                    safePoCurrentPage === page
+                                      ? 'bg-[#0A7469] text-white'
+                                      : 'bg-white border border-[#E2E7EE] text-[#5B6B7F] hover:bg-[#F8FAFC] hover:text-[#0B2545]'
+                                  }`}
+                                >
+                                  {page}
+                                </button>
+                              </div>
+                            );
+                          })}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setPoCurrentPage((p) => Math.min(totalBackofficePages, p + 1))}
+                        disabled={safePoCurrentPage === totalBackofficePages}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#E2E7EE] bg-white text-[#5B6B7F] hover:bg-[#F8FAFC] hover:text-[#0B2545] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <span>Siguiente</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
