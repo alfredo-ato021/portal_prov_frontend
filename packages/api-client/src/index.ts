@@ -1133,6 +1133,32 @@ export class FactumfluxClient {
     return this.fetch(`/api/v1/supplier/invoices/${encodeURIComponent(invoiceId)}${query}`);
   }
 
+  async getClientInvoiceDetail(invoiceId: string): Promise<InvoiceDetail> {
+    return this.fetch(`/api/v1/backoffice/invoices/${encodeURIComponent(invoiceId)}`);
+  }
+
+  async uploadInvoiceStatusUpdateExcel(file: File): Promise<{
+    success: boolean;
+    message: string;
+    updated_count: number;
+    total_rows: number;
+    errors?: string[];
+  }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.fetch('/api/v1/backoffice/invoices/bulk-update-status', {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
+  getInvoiceStatusTemplateUrl(): string {
+    const params = new URLSearchParams();
+    if (this.tenantId) params.append('tenant', this.tenantId);
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    return `${this.baseUrl}/api/v1/backoffice/templates/invoice_status${queryString}`;
+  }
+
   getInvoicePdfUrl(invoiceId: string, isSupplier: boolean = true): string {
     const base = isSupplier ? '/api/v1/supplier/invoices' : '/api/v1/backoffice/invoices';
     const params = new URLSearchParams();

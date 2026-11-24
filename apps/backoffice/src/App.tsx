@@ -16,6 +16,7 @@ import {
   RotateCcw,
   Building2,
   Hash,
+  Eye,
 } from 'lucide-react';
 import {
   FactumfluxClient,
@@ -35,6 +36,7 @@ import { ClientUsersView } from './components/ClientUsersView';
 import { ClientAuditLogsView } from './components/ClientAuditLogsView';
 import { SuperAdminConsoleView } from './components/SuperAdminConsoleView';
 import { PurchaseOrderDetailModal } from './components/PurchaseOrderDetailModal';
+import { InvoiceDetailModal } from './components/InvoiceDetailModal';
 import { SystemModal, SystemModalType } from '@factumflux/ui';
 
 const apiBaseUrl =
@@ -116,6 +118,14 @@ export default function App() {
   const [scheduledDateInput, setScheduledDateInput] = useState('');
   const [paymentStatusInput, setPaymentStatusInput] = useState<string>('Pendiente');
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
+
+  // Invoice Detail & Document Preview Modal
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
+
+  // Status Excel Bulk Ingestion modal state
+  const [isIngestingStatusExcel, setIsIngestingStatusExcel] = useState(false);
+  const [isUploadingStatusExcel, setIsUploadingStatusExcel] = useState(false);
+  const statusExcelInputRef = useRef<HTMLInputElement>(null);
 
   // System Modal Dialog state
   const [systemModal, setSystemModal] = useState<{
@@ -327,6 +337,22 @@ export default function App() {
     }
   };
 
+  const handleStatusExcelUpload = async (file: File) => {
+    setIsUploadingStatusExcel(true);
+    setActionMessage(null);
+    try {
+      const res = await client.uploadInvoiceStatusUpdateExcel(file);
+      setActionMessage(`Actualización masiva exitosa: ${res.updated_count} comprobante(s) actualizados.`);
+      setIsIngestingStatusExcel(false);
+      await loadInvoicesAndOrders();
+    } catch (err: any) {
+      showErrorModal('Error al Actualizar Estados', err.message || 'Error procesando archivo Excel/CSV.');
+    } finally {
+      setIsUploadingStatusExcel(false);
+      if (statusExcelInputRef.current) statusExcelInputRef.current.value = '';
+    }
+  };
+
   // 1. Client Login Screen
   if (authMode === 'client_login') {
     return (
@@ -482,13 +508,35 @@ export default function App() {
                     Cruce 3-Way Match con órdenes ERP, validación SUNAT y contabilización en SAP.
                   </p>
                 </div>
-                <button
-                  onClick={loadInvoicesAndOrders}
-                  className="p-2.5 rounded-xl bg-white text-[#5B6B7F] hover:text-[#0B2545] hover:bg-[#F8FAFC] transition-colors border border-[#E2E7EE] shadow-sm self-start sm:self-auto"
-                  title="Actualizar listado"
-                >
-                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                </button>
+                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => window.open(client.getInvoiceStatusTemplateUrl(), '_blank')}
+                    className="px-3 py-2 rounded-xl bg-white text-[#5B6B7F] hover:text-[#0B2545] hover:bg-[#F8FAFC] transition-colors border border-[#E2E7EE] text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+                    title="Descargar plantilla Excel para actualizar estados de proceso y pago"
+                  >
+                    <Download className="w-3.5 h-3.5 text-[#0A7469]" />
+                    <span>Plantilla Estados (.xlsx)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsIngestingStatusExcel(true)}
+                    className="px-3.5 py-2 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
+                    title="Cargar archivo Excel para actualizar estados de proceso, pago y fecha programada"
+                  >
+                    <UploadCloud className="w-3.5 h-3.5" />
+                    <span>Actualizar Estados (Excel)</span>
+                  </button>
+
+                  <button
+                    onClick={loadInvoicesAndOrders}
+                    className="p-2 rounded-xl bg-white text-[#5B6B7F] hover:text-[#0B2545] hover:bg-[#F8FAFC] transition-colors border border-[#E2E7EE] shadow-sm"
+                    title="Actualizar listado"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
               </div>
 
               {/* Invoices Table */}
@@ -515,11 +563,19 @@ export default function App() {
                         </tr>
                       ) : (
                         invoices.map((inv) => (
-                          <tr key={inv.id} className="hover:bg-[#F8FAFC]/80 transition-colors">
+                          <tr
+                            key={inv.id}
+                            onClick={() => setSelectedInvoiceId(inv.id)}
+                            className="hover:bg-teal-50/40 cursor-pointer transition-colors group"
+                            title="Hacé clic para ver el detalle del comprobante y sus documentos PDF adjuntos"
+                          >
                             <td className="py-4 px-4">
-                              <span className="font-bold text-[#0B2545] tracking-wide block">
-                                {inv.series}-{inv.number}
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-[#0B2545] group-hover:text-[#0A7469] tracking-wide block transition-colors">
+                                  {inv.series}-{inv.number}
+                                </span>
+                                <Eye className="w-3.5 h-3.5 text-[#0A7469] opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border ${
                                   inv.document_type === '02'
@@ -599,28 +655,38 @@ export default function App() {
 
                             <td className="py-4 px-4 text-right space-x-1.5">
                               <button
-                                onClick={() => handleValidateSUNAT(inv.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleValidateSUNAT(inv.id);
+                                }}
                                 disabled={processingInvoiceId === inv.id}
                                 className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#F8FAFC] text-[#0B2545] text-xs font-medium border border-[#E2E7EE] shadow-sm transition-colors"
                               >
                                 SUNAT
                               </button>
                               <button
-                                onClick={() => handleRunMatch(inv.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRunMatch(inv.id);
+                                }}
                                 disabled={processingInvoiceId === inv.id}
                                 className="px-2.5 py-1 rounded-lg bg-[#0B2545] hover:bg-[#07192F] text-white text-xs font-medium transition-colors"
                               >
                                 Match
                               </button>
                               <button
-                                onClick={() => handlePostToSAP(inv.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePostToSAP(inv.id);
+                                }}
                                 disabled={processingInvoiceId === inv.id}
                                 className="px-2.5 py-1 rounded-lg bg-[#0A7469] hover:bg-[#075A52] text-white text-xs font-medium transition-colors"
                               >
                                 Post SAP
                               </button>
                               <button
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   setSchedulingInvoice(inv);
                                   setScheduledDateInput(inv.payment_scheduled_date || new Date().toISOString().split('T')[0]);
                                   setPaymentStatusInput(inv.payment_status || 'Pendiente');
@@ -1373,6 +1439,86 @@ export default function App() {
                 className="px-5 py-2.5 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-bold text-xs transition-all shadow-md shadow-[#0A7469]/20 disabled:opacity-50"
               >
                 {isSavingSchedule ? 'Guardando...' : 'Confirmar Programación'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL DE DETALLE DE COMPROBANTE Y VISOR PDF / GRE ──────────── */}
+      {selectedInvoiceId && (
+        <InvoiceDetailModal
+          invoiceId={selectedInvoiceId}
+          client={client}
+          onClose={() => setSelectedInvoiceId(null)}
+        />
+      )}
+
+      {/* ── MODAL DE ACTUALIZACIÓN MASIVA DE ESTADOS DE FACTURAS (EXCEL / CSV) ── */}
+      {isIngestingStatusExcel && (
+        <div className="fixed inset-0 bg-[#0B2545]/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white border border-[#E2E7EE] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-[#0B2545] flex items-center gap-2">
+                <FileSpreadsheet className="w-5 h-5 text-[#0A7469]" />
+                Actualizar Estados (Excel / CSV)
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsIngestingStatusExcel(false)}
+                className="text-[#5B6B7F] hover:text-[#0B2545]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-[#5B6B7F] leading-relaxed">
+              Subí un archivo Excel (.xlsx) o CSV con las columnas <strong className="text-[#0B2545]">serie_numero</strong>, <strong className="text-[#0B2545]">estado_proceso</strong>, <strong className="text-[#0B2545]">estado_pago</strong> y <strong className="text-[#0B2545]">fecha_programada_pago</strong> para actualizar los comprobantes en lote.
+            </p>
+
+            <div className="bg-[#F8FAFC] border border-[#E2E7EE] rounded-xl p-3 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs text-[#0B2545] font-semibold">
+                <FileSpreadsheet className="w-4 h-4 text-[#0A7469]" />
+                Plantilla Oficial Formateada
+              </div>
+              <button
+                type="button"
+                onClick={() => window.open(client.getInvoiceStatusTemplateUrl(), '_blank')}
+                className="text-xs font-bold text-[#0A7469] hover:underline flex items-center gap-1"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Descargar (.xlsx)
+              </button>
+            </div>
+
+            <div className="pt-2">
+              <input
+                type="file"
+                ref={statusExcelInputRef}
+                accept=".xlsx,.xls,.csv"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleStatusExcelUpload(f);
+                }}
+                className="hidden"
+              />
+              <button
+                type="button"
+                disabled={isUploadingStatusExcel}
+                onClick={() => statusExcelInputRef.current?.click()}
+                className="w-full py-3 px-4 rounded-xl bg-[#0A7469] hover:bg-[#075A52] text-white font-bold flex items-center justify-center gap-2 shadow-sm transition-colors disabled:opacity-50"
+              >
+                {isUploadingStatusExcel ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Procesando archivo...</span>
+                  </>
+                ) : (
+                  <>
+                    <UploadCloud className="w-4 h-4" />
+                    <span>Seleccionar Archivo Excel o CSV</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
