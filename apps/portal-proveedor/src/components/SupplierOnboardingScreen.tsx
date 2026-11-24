@@ -130,7 +130,18 @@ export const SupplierOnboardingScreen: React.FC<SupplierOnboardingScreenProps> =
         setError('No se pudo completar el registro de la cuenta.');
       }
     } catch (err: any) {
-      setError(err.message || 'Error al crear usuario y activar el portal.');
+      let msg = err.message || 'Error al crear usuario y activar el portal.';
+      // Sanitizar cualquier residuo de error SQL técnico para garantizar experiencia a nivel de usuario
+      if (msg.includes('duplicate key') || msg.includes('23505') || msg.includes('identity_provider_id')) {
+        if (msg.toLowerCase().includes('email') || msg.toLowerCase().includes('correo')) {
+          msg = 'El correo electrónico ingresado ya se encuentra registrado. Inicie sesión o utilice la opción de recuperar contraseña.';
+        } else if (msg.toLowerCase().includes('ruc')) {
+          msg = 'Este RUC ya cuenta con un usuario registrado en el portal. Inicie sesión directamente.';
+        } else {
+          msg = 'Ya existe una cuenta registrada con estos datos en el sistema. Por favor verifique el correo electrónico ingresado.';
+        }
+      }
+      setError(msg);
     } finally {
       setSubmitting(false);
     }
@@ -196,9 +207,24 @@ export const SupplierOnboardingScreen: React.FC<SupplierOnboardingScreenProps> =
           )}
 
           {error && (
-            <div className="mb-5 p-3 rounded-xl bg-[#FDECEA] border border-[#B42318]/30 text-[#B42318] text-xs flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#B42318]" />
-              {error}
+            <div className="mb-5 p-3.5 rounded-xl bg-[#FDECEA] border border-[#B42318]/30 text-[#B42318] text-xs flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-[#B42318] shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <span className="font-semibold block mb-0.5">Dato duplicado o inconsistente</span>
+                <span>{error}</span>
+                {(error.toLowerCase().includes('inicie sesión') || error.toLowerCase().includes('registrado')) && (
+                  <div className="mt-2.5 pt-2 border-t border-[#B42318]/20 flex items-center justify-between">
+                    <span className="text-[11px] text-[#B42318]/90">¿Ya posee credenciales de acceso?</span>
+                    <button
+                      type="button"
+                      onClick={onSwitchToLogin}
+                      className="font-bold text-[#0A7469] hover:underline px-2.5 py-1 bg-white rounded-lg border border-[#0A7469]/20 shadow-xs text-xs"
+                    >
+                      Iniciar Sesión &rarr;
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
