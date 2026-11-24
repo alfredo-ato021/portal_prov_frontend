@@ -1873,9 +1873,39 @@ export const UploadInvoiceView: React.FC<UploadInvoiceViewProps> = ({
           {submitError && (
             <div className="p-4 rounded-xl bg-[#FDECEA] border border-[#B42318]/30 text-[#B42318] text-sm flex items-start gap-3">
               <XCircle className="w-5 h-5 flex-shrink-0 text-[#B42318] mt-0.5" />
-              <div>
-                <p className="font-semibold">Error al ingresar comprobante</p>
+              <div className="flex-1">
+                <p className="font-semibold">
+                  {submitError.toLowerCase().includes('duplicado') || submitError.toLowerCase().includes('ya se encuentra registrado')
+                    ? 'Comprobante duplicado'
+                    : submitError.toLowerCase().includes('homologación')
+                    ? 'Homologación de proveedor requerida'
+                    : 'Error al ingresar comprobante'}
+                </p>
                 <p className="text-xs text-[#B42318]/90 mt-0.5">{submitError}</p>
+                {submitError.toLowerCase().includes('homologación') && onNavigateToQualification && (
+                  <div className="mt-2.5 pt-2 border-t border-[#B42318]/20 flex items-center justify-between">
+                    <span className="text-[11px] text-[#B42318]/90">Debe regularizar su expediente antes de facturar</span>
+                    <button
+                      type="button"
+                      onClick={onNavigateToQualification}
+                      className="font-bold text-[#0A7469] hover:underline px-2.5 py-1 bg-white rounded-lg border border-[#0A7469]/20 shadow-xs text-xs"
+                    >
+                      Ir a Homologación &rarr;
+                    </button>
+                  </div>
+                )}
+                {(submitError.toLowerCase().includes('duplicado') || submitError.toLowerCase().includes('ya se encuentra registrado')) && (
+                  <div className="mt-2.5 pt-2 border-t border-[#B42318]/20 flex items-center justify-between">
+                    <span className="text-[11px] text-[#B42318]/90">El documento ya fue emitido y está en seguimiento</span>
+                    <button
+                      type="button"
+                      onClick={onCancel}
+                      className="font-bold text-[#0A7469] hover:underline px-2.5 py-1 bg-white rounded-lg border border-[#0A7469]/20 shadow-xs text-xs"
+                    >
+                      Ver Mis Facturas &rarr;
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
